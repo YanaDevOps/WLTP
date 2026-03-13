@@ -9,14 +9,7 @@ on:
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-
-    runs-on: ${{ matrix.platform.os }}
+    runs-on: windows-latest
 
     steps:
       - name: Checkout repository
@@ -24,9 +17,7 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform.target }}
-
+        
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
@@ -40,14 +31,24 @@ jobs:
         run: npm run build
 
       - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          rustc --version
+          cargo --version
+          npm run tauri build --verbose
+
+      - name: List build outputs
+        run: |
+          echo "Release directory:"
+          ls -R src-tauri/target/release/
+          echo "Bundle directory:"
+          ls -R src-tauri/target/release/bundle/ 2>/dev/null || echo "No bundle directory"
+
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: WLTP-Windows-Portable
+          name: WLTP-Windows
           path: |
-            src-tauri/target/release/bundle/nsis/WLTP_*_setup.exe
-            src-tauri/target/release/WLTP.exe
+            src-tauri/target/release/*.exe
+            src-tauri/target/release/bundle/**/*.exe
+            src-tauri/target/release/bundle/**/*.msi
           if-no-files-found: warn
