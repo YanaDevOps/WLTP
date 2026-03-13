@@ -31,24 +31,13 @@ jobs:
         run: npm run build
 
       - name: Build Tauri app
-        run: |
-          rustc --version
-          cargo --version
-          npm run tauri build --verbose
-
-      - name: List build outputs
-        run: |
-          echo "Release directory:"
-          ls -R src-tauri/target/release/
-          echo "Bundle directory:"
-          ls -R src-tauri/target/release/bundle/ 2>/dev/null || echo "No bundle directory"
+        uses: tauri-apps/tauri-action@v0.18.3
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: WLTP-Windows
+          name: WLTP-Windows-Portable
           path: |
+            src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/*.exe
-            src-tauri/target/release/bundle/**/*.exe
-            src-tauri/target/release/bundle/**/*.msi
           if-no-files-found: warn
