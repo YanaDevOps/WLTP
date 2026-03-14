@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "generate-icons": "node generate-icons-simple.js"
+    "generate-icons": "node generate-icons-simple.js",
+    "generate-ico": "node generate-ico.js"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.2.0",

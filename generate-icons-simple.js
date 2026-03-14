@@ -98,13 +98,18 @@ function createMinimalPNG(width, height) {
   ]);
 }
 
-console.log('Generating icons...');
+function generateIcons() {
+  console.log('Generating icons...');
 
-sizes.forEach(({ size, name }) => {
-  const buffer = createMinimalPNG(size, size);
-  const filePath = join(iconsDir, name);
-  writeFileSync(filePath, buffer);
-  console.log(`  ✓ Generated ${name}`);
-});
+  sizes.forEach(({ size, name }) => {
+    const buffer = createMinimalPNG(size, size);
+    const filePath = join(iconsDir, name);
+    writeFileSync(filePath, buffer);
+    console.log(`  ✓ Generated ${name}`);
+  });
 
-console.log('\n✅ Icons generated successfully!');
+  console.log('\n✅ PNG icons generated successfully!');
+  console.log('Note: Run "node generate-ico.js" to create the Windows .ico file.');
+}
+
+generateIcons();
