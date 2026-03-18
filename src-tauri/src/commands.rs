@@ -8,7 +8,7 @@ use crate::traceroute::TraceRunner;
 use crate::types::*;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex as StdMutex};
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::{mpsc, Mutex, RwLock};
 use tracing::{error, info};
@@ -25,6 +25,7 @@ pub struct AppState {
 pub struct ActiveSession {
     pub runner: Arc<Mutex<Option<TraceRunner>>>,
     pub cancel_flag: Arc<AtomicBool>,
+    pub hops: Arc<StdMutex<Vec<HopSample>>>,
 }
 
 impl Default for AppState {
@@ -69,7 +70,8 @@ pub async fn start_trace(
     session.started_at = Some(chrono::Utc::now());
 
     let session_id = session.id.clone();
-    let cancel_flag = Arc::new(AtomicBool::new(true));
+    let cancel_flag = runner.cancel_flag();
+    let hops = runner.hops_handle();
 
     {
         let mut sessions = state.sessions.write().await;
@@ -78,6 +80,7 @@ pub async fn start_trace(
             ActiveSession {
                 runner: Arc::new(Mutex::new(Some(runner))),
                 cancel_flag: cancel_flag.clone(),
+                hops,
             },
         );
     }
@@ -199,12 +202,6 @@ pub async fn stop_trace(state: State<'_, Arc<AppState>>, session_id: String) -> 
 
     if let Some(session) = sessions.get(&session_id) {
         session.cancel_flag.store(false, Ordering::Relaxed);
-
-        if let Ok(mut runner_guard) = session.runner.try_lock() {
-            if let Some(runner) = runner_guard.as_mut() {
-                runner.stop();
-            }
-        }
     }
 
     Ok(())
@@ -219,11 +216,7 @@ pub async fn get_session_hops(
     let sessions = state.sessions.read().await;
 
     if let Some(session) = sessions.get(&session_id) {
-        if let Ok(runner_guard) = session.runner.try_lock() {
-            if let Some(runner) = runner_guard.as_ref() {
-                return Ok(runner.get_hops());
-            }
-        }
+        return Ok(session.hops.lock().unwrap().clone());
     }
 
     Err("Session not found or not running".to_string())

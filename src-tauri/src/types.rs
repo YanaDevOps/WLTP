@@ -170,6 +170,11 @@ impl HopStats {
     pub fn add_sample(&mut self, latency_ms: f64) {
         self.sent += 1;
         self.received += 1;
+        self.loss_percent = if self.sent > 0 {
+            ((self.sent - self.received) as f64 / self.sent as f64) * 100.0
+        } else {
+            0.0
+        };
 
         self.last_ms = Some(latency_ms);
 
