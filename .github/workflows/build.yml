@@ -30,6 +30,9 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+      - name: Ensure Windows icon exists
+        run: npm run generate-ico
+
       - name: Build Tauri app
         run: npx tauri build
 
