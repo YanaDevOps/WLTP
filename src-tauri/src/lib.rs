@@ -4,7 +4,7 @@
 
 pub mod commands;
 pub mod interpretation;
-pub mod traceroute_portable as traceroute;
+pub mod traceroute;
 pub mod types;
 
 pub use commands::AppState;
