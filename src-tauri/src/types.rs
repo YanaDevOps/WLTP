@@ -1,9 +1,9 @@
 //! WLTP - Modern WinMTR for Windows/macOS
-//! 
+//!
 //! This module provides the core types used throughout the application.
 
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 
 /// Severity level for hop and session interpretation
@@ -51,11 +51,21 @@ pub struct TraceConfig {
     pub count: u32,
 }
 
-fn default_protocol() -> ProtocolMode { ProtocolMode::Icmp }
-fn default_interval() -> u64 { 1000 }
-fn default_max_hops() -> u8 { 30 }
-fn default_timeout() -> u64 { 1000 }
-fn default_count() -> u32 { 0 }
+fn default_protocol() -> ProtocolMode {
+    ProtocolMode::Icmp
+}
+fn default_interval() -> u64 {
+    1000
+}
+fn default_max_hops() -> u8 {
+    30
+}
+fn default_timeout() -> u64 {
+    1000
+}
+fn default_count() -> u32 {
+    0
+}
 
 impl Default for TraceConfig {
     fn default() -> Self {
@@ -160,26 +170,26 @@ impl HopStats {
     pub fn add_sample(&mut self, latency_ms: f64) {
         self.sent += 1;
         self.received += 1;
-        
+
         self.last_ms = Some(latency_ms);
-        
+
         match self.best_ms {
             None => self.best_ms = Some(latency_ms),
             Some(best) if latency_ms < best => self.best_ms = Some(latency_ms),
             _ => {}
         }
-        
+
         match self.worst_ms {
             None => self.worst_ms = Some(latency_ms),
             Some(worst) if latency_ms > worst => self.worst_ms = Some(latency_ms),
             _ => {}
         }
-        
+
         // Calculate running average
         let prev_avg = self.avg_ms.unwrap_or(0.0);
         let n = self.received as f64;
         self.avg_ms = Some(prev_avg + (latency_ms - prev_avg) / n);
-        
+
         // Calculate jitter as mean deviation from average
         if let Some(avg) = self.avg_ms {
             let deviation = (latency_ms - avg).abs();
@@ -187,7 +197,7 @@ impl HopStats {
             self.jitter_ms = Some(prev_jitter + (deviation - prev_jitter) / n);
         }
     }
-    
+
     /// Record a timeout (packet sent but not received)
     pub fn add_timeout(&mut self) {
         self.sent += 1;
@@ -279,14 +289,9 @@ impl Default for SessionSummary {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum TraceEvent {
     /// Session has started
-    SessionStarted {
-        session: TraceSession,
-    },
+    SessionStarted { session: TraceSession },
     /// A new hop was discovered
-    HopDiscovered {
-        session_id: String,
-        hop: HopSample,
-    },
+    HopDiscovered { session_id: String, hop: HopSample },
     /// A hop received a response
     HopResponse {
         session_id: String,
@@ -294,10 +299,7 @@ pub enum TraceEvent {
         latency_ms: f64,
     },
     /// A hop timed out
-    HopTimeout {
-        session_id: String,
-        hop_index: u8,
-    },
+    HopTimeout { session_id: String, hop_index: u8 },
     /// Statistics updated for a hop
     HopStatsUpdate {
         session_id: String,
@@ -311,10 +313,7 @@ pub enum TraceEvent {
         hops: Vec<HopSample>,
     },
     /// Session encountered an error
-    SessionError {
-        session_id: String,
-        error: String,
-    },
+    SessionError { session_id: String, error: String },
     /// DNS resolution result
     DnsResolved {
         session_id: String,
@@ -333,7 +332,7 @@ mod tests {
         stats.add_sample(10.0);
         stats.add_sample(20.0);
         stats.add_sample(15.0);
-        
+
         assert_eq!(stats.sent, 3);
         assert_eq!(stats.received, 3);
         assert_eq!(stats.loss_percent, 0.0);
@@ -342,14 +341,14 @@ mod tests {
         assert_eq!(stats.last_ms, Some(15.0));
         assert!(stats.avg_ms.unwrap() > 0.0);
     }
-    
+
     #[test]
     fn test_hop_stats_timeout() {
         let mut stats = HopStats::default();
         stats.add_sample(10.0);
         stats.add_timeout();
         stats.add_sample(20.0);
-        
+
         assert_eq!(stats.sent, 3);
         assert_eq!(stats.received, 2);
         assert!((stats.loss_percent - 33.333).abs() < 1.0);

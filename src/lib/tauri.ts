@@ -22,16 +22,24 @@ export async function getSessionHops(sessionId: string): Promise<HopSample[]> {
   return invoke<HopSample[]>('get_session_hops', { sessionId });
 }
 
-export async function interpretHops(hops: HopSample[]): Promise<HopSample[]> {
-  return invoke<HopSample[]>('interpret_hops', { hops });
+export async function interpretHops(hops: HopSample[]): Promise<SessionSummary> {
+  return invoke<SessionSummary>('interpret_hops', { hops });
 }
 
-export async function exportJson(sessionId: string): Promise<string> {
-  return invoke<string>('export_json', { sessionId });
+export async function exportJson(
+  summary: SessionSummary,
+  hops: HopSample[],
+  config: TraceConfig,
+): Promise<string> {
+  return invoke<string>('export_json', { summary, hops, config });
 }
 
-export async function exportHtml(sessionId: string): Promise<string> {
-  return invoke<string>('export_html', { sessionId });
+export async function exportHtml(
+  summary: SessionSummary,
+  hops: HopSample[],
+  config: TraceConfig,
+): Promise<string> {
+  return invoke<string>('export_html', { summary, hops, config });
 }
 
 export async function getSettings(): Promise<Settings> {

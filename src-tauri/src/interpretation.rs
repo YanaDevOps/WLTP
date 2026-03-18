@@ -1,5 +1,5 @@
 //! Interpretation engine for trace results
-//! 
+//!
 //! This module implements a rule-based engine that analyzes hop statistics
 //! and provides human-readable interpretations of network issues.
 
@@ -36,7 +36,7 @@ impl InterpretationEngine {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     /// Interpret a single hop based on its statistics and context
     pub fn interpret_hop(
         &self,
@@ -45,35 +45,35 @@ impl InterpretationEngine {
         next_hops: &[&HopSample],
     ) -> HopInterpretation {
         let stats = &hop.stats;
-        
+
         // No responses at all
         if stats.received == 0 && stats.sent > 3 {
             return self.interpret_no_response(hop, is_destination, next_hops);
         }
-        
+
         // Check for loss
         if stats.loss_percent > self.loss_warning_threshold {
             return self.interpret_loss(hop, is_destination, next_hops);
         }
-        
+
         // Check for high latency
         if let Some(avg) = stats.avg_ms {
             if avg > self.latency_warning_threshold {
                 return self.interpret_high_latency(hop, is_destination, next_hops);
             }
         }
-        
+
         // Check for high jitter
         if let Some(jitter) = stats.jitter_ms {
             if jitter > self.jitter_warning_threshold {
                 return self.interpret_high_jitter(hop, is_destination);
             }
         }
-        
+
         // Everything looks good
         self.interpret_ok(hop, is_destination)
     }
-    
+
     fn interpret_no_response(
         &self,
         hop: &HopSample,
@@ -81,8 +81,10 @@ impl InterpretationEngine {
         next_hops: &[&HopSample],
     ) -> HopInterpretation {
         // Check if subsequent hops are responding
-        let later_hops_ok = next_hops.iter().any(|h| h.stats.received > 0 && h.stats.loss_percent < 10.0);
-        
+        let later_hops_ok = next_hops
+            .iter()
+            .any(|h| h.stats.received > 0 && h.stats.loss_percent < 10.0);
+
         if is_destination {
             HopInterpretation {
                 severity: Severity::Critical,
@@ -121,7 +123,7 @@ impl InterpretationEngine {
             }
         }
     }
-    
+
     fn interpret_loss(
         &self,
         hop: &HopSample,
@@ -129,13 +131,17 @@ impl InterpretationEngine {
         next_hops: &[&HopSample],
     ) -> HopInterpretation {
         let loss_percent = hop.stats.loss_percent;
-        
+
         // Check if loss continues to subsequent hops
-        let loss_continues = next_hops.iter().any(|h| h.stats.loss_percent > self.loss_warning_threshold);
-        
+        let loss_continues = next_hops
+            .iter()
+            .any(|h| h.stats.loss_percent > self.loss_warning_threshold);
+
         // Check if this is likely ICMP rate limiting
-        let likely_rate_limited = !is_destination && !loss_continues && next_hops.iter().all(|h| h.stats.loss_percent < 5.0);
-        
+        let likely_rate_limited = !is_destination
+            && !loss_continues
+            && next_hops.iter().all(|h| h.stats.loss_percent < 5.0);
+
         if likely_rate_limited {
             HopInterpretation {
                 severity: Severity::Warning,
@@ -154,7 +160,7 @@ impl InterpretationEngine {
             } else {
                 Severity::Warning
             };
-            
+
             HopInterpretation {
                 severity,
                 headline: format!("{:.0}% packet loss to destination", loss_percent),
@@ -194,7 +200,7 @@ impl InterpretationEngine {
             }
         }
     }
-    
+
     fn interpret_high_latency(
         &self,
         hop: &HopSample,
@@ -203,7 +209,7 @@ impl InterpretationEngine {
     ) -> HopInterpretation {
         let avg = hop.stats.avg_ms.unwrap_or(0.0);
         let is_critical = avg > self.latency_critical_threshold;
-        
+
         // Check if latency increase started at this hop
         let latency_increase_here = if let Some(prev_hop) = next_hops.first() {
             if let Some(prev_avg) = prev_hop.stats.avg_ms {
@@ -214,18 +220,21 @@ impl InterpretationEngine {
         } else {
             false
         };
-        
+
         // Check if latency continues to destination
         let latency_continues = next_hops.iter().all(|h| {
-            h.stats.avg_ms.map(|a| a > self.latency_warning_threshold).unwrap_or(false)
+            h.stats
+                .avg_ms
+                .map(|a| a > self.latency_warning_threshold)
+                .unwrap_or(false)
         });
-        
+
         let severity = if is_critical {
             Severity::Critical
         } else {
             Severity::Warning
         };
-        
+
         if is_destination {
             HopInterpretation {
                 severity,
@@ -265,10 +274,10 @@ impl InterpretationEngine {
             }
         }
     }
-    
+
     fn interpret_high_jitter(&self, hop: &HopSample, is_destination: bool) -> HopInterpretation {
         let jitter = hop.stats.jitter_ms.unwrap_or(0.0);
-        
+
         if is_destination {
             HopInterpretation {
                 severity: Severity::Warning,
@@ -296,10 +305,14 @@ impl InterpretationEngine {
             }
         }
     }
-    
+
     fn interpret_ok(&self, hop: &HopSample, is_destination: bool) -> HopInterpretation {
-        let avg = hop.stats.avg_ms.map(|a| format!("{:.0}ms", a)).unwrap_or_else(|| "N/A".to_string());
-        
+        let avg = hop
+            .stats
+            .avg_ms
+            .map(|a| format!("{:.0}ms", a))
+            .unwrap_or_else(|| "N/A".to_string());
+
         if is_destination {
             HopInterpretation {
                 severity: Severity::Ok,
@@ -318,36 +331,38 @@ impl InterpretationEngine {
             }
         }
     }
-    
+
     /// Generate an overall session summary
     pub fn generate_summary(&self, hops: &[HopSample]) -> SessionSummary {
         if hops.is_empty() {
             return SessionSummary {
                 overall_status: Severity::Unknown,
                 primary_finding: "No trace data available".to_string(),
-                secondary_findings: vec!["The trace did not complete or no hops were discovered".to_string()],
+                secondary_findings: vec![
+                    "The trace did not complete or no hops were discovered".to_string()
+                ],
                 recommended_next_steps: vec!["Try running the trace again".to_string()],
                 problem_hop_index: None,
                 destination_reachable: false,
             };
         }
-        
+
         // Find destination hop (highest index)
         let destination = hops.iter().max_by_key(|h| h.index);
         let destination_reachable = destination
             .map(|d| d.stats.received > 0 && d.stats.loss_percent < 50.0)
             .unwrap_or(false);
-        
+
         // Find the first problematic hop
         let problem_hop = hops.iter().find(|h| {
-            matches!(h.status, Severity::Warning | Severity::Critical) &&
-            h.stats.received > 0 // Skip hops that just didn't respond
+            matches!(h.status, Severity::Warning | Severity::Critical) && h.stats.received > 0
+            // Skip hops that just didn't respond
         });
-        
+
         // Analyze overall patterns
         let mut findings: Vec<String> = Vec::new();
         let mut recommendations: Vec<String> = Vec::new();
-        
+
         // Check destination status
         if let Some(dest) = destination {
             if dest.stats.received == 0 {
@@ -355,12 +370,19 @@ impl InterpretationEngine {
                 recommendations.push("Verify the destination address is correct".to_string());
                 recommendations.push("The server may be down or blocking ICMP".to_string());
             } else if dest.stats.loss_percent > self.loss_critical_threshold {
-                findings.push(format!("High packet loss at destination: {:.0}%", dest.stats.loss_percent));
-                recommendations.push("Contact your ISP or the destination server administrator".to_string());
+                findings.push(format!(
+                    "High packet loss at destination: {:.0}%",
+                    dest.stats.loss_percent
+                ));
+                recommendations
+                    .push("Contact your ISP or the destination server administrator".to_string());
             } else if dest.stats.loss_percent > self.loss_warning_threshold {
-                findings.push(format!("Moderate packet loss at destination: {:.0}%", dest.stats.loss_percent));
+                findings.push(format!(
+                    "Moderate packet loss at destination: {:.0}%",
+                    dest.stats.loss_percent
+                ));
             }
-            
+
             if let Some(avg) = dest.stats.avg_ms {
                 if avg > self.latency_critical_threshold {
                     findings.push(format!("Very high latency to destination: {:.0}ms", avg));
@@ -368,36 +390,40 @@ impl InterpretationEngine {
                     findings.push(format!("Elevated latency to destination: {:.0}ms", avg));
                 }
             }
-            
+
             if let Some(jitter) = dest.stats.jitter_ms {
                 if jitter > self.jitter_warning_threshold {
                     findings.push(format!("High jitter at destination: {:.0}ms", jitter));
-                    recommendations.push("For VoIP/gaming issues, check for bufferbloat on your router".to_string());
+                    recommendations.push(
+                        "For VoIP/gaming issues, check for bufferbloat on your router".to_string(),
+                    );
                 }
             }
         }
-        
+
         // Check for intermediate issues that propagate
         let mut loss_start: Option<u8> = None;
         let mut latency_start: Option<u8> = None;
-        
-        for hop in hops.iter().take(hops.len().saturating_sub(1)) { // Exclude destination
+
+        for hop in hops.iter().take(hops.len().saturating_sub(1)) {
+            // Exclude destination
             if loss_start.is_none() && hop.stats.loss_percent > self.loss_warning_threshold {
                 // Check if loss continues
-                let continues = hops.iter()
+                let continues = hops
+                    .iter()
                     .filter(|h| h.index > hop.index)
                     .any(|h| h.stats.loss_percent > self.loss_warning_threshold);
                 if continues {
                     loss_start = Some(hop.index);
                 }
             }
-            
+
             if latency_start.is_none() {
                 if let Some(avg) = hop.stats.avg_ms {
                     if avg > self.latency_warning_threshold {
-                        let continues = hops.iter()
-                            .filter(|h| h.index > hop.index)
-                            .any(|h| h.stats.avg_ms.unwrap_or(0.0) > self.latency_warning_threshold);
+                        let continues = hops.iter().filter(|h| h.index > hop.index).any(|h| {
+                            h.stats.avg_ms.unwrap_or(0.0) > self.latency_warning_threshold
+                        });
                         if continues {
                             latency_start = Some(hop.index);
                         }
@@ -405,17 +431,18 @@ impl InterpretationEngine {
                 }
             }
         }
-        
+
         // Identify ISP/local network hops (typically first few)
         let first_hop = hops.iter().find(|h| h.index == 1);
         if let Some(hop) = first_hop {
             if hop.stats.loss_percent > self.loss_warning_threshold {
                 findings.push("Issues detected starting at your local network or ISP".to_string());
-                recommendations.push("Check your local network equipment (router, cables)".to_string());
+                recommendations
+                    .push("Check your local network equipment (router, cables)".to_string());
                 recommendations.push("Restart your router/modem".to_string());
             }
         }
-        
+
         // Determine overall status
         let overall_status = if !destination_reachable {
             Severity::Critical
@@ -424,7 +451,7 @@ impl InterpretationEngine {
         } else {
             Severity::Ok
         };
-        
+
         // Generate primary finding
         let primary_finding = if !destination_reachable {
             "Destination unreachable".to_string()
@@ -433,28 +460,31 @@ impl InterpretationEngine {
         } else if let Some(lat_idx) = latency_start {
             format!("Latency increase begins at hop {}", lat_idx)
         } else if let Some(problem) = problem_hop {
-            problem.interpretation.as_ref()
+            problem
+                .interpretation
+                .as_ref()
                 .map(|i| i.headline.clone())
                 .unwrap_or_else(|| "Some issues detected".to_string())
         } else {
             "Connection looks stable".to_string()
         };
-        
+
         // Add secondary findings
         if findings.is_empty() {
             findings.push("No significant issues detected along the route".to_string());
         }
-        
+
         // Add default recommendations if none
         if recommendations.is_empty() {
             if overall_status == Severity::Ok {
                 recommendations.push("No action needed - connection is healthy".to_string());
             } else {
                 recommendations.push("Monitor the connection for changes".to_string());
-                recommendations.push("Share this report with technical support if issues persist".to_string());
+                recommendations
+                    .push("Share this report with technical support if issues persist".to_string());
             }
         }
-        
+
         SessionSummary {
             overall_status,
             primary_finding,
@@ -469,8 +499,14 @@ impl InterpretationEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
-    fn make_hop(index: u8, sent: u32, received: u32, avg_ms: Option<f64>, loss_percent: f64) -> HopSample {
+
+    fn make_hop(
+        index: u8,
+        sent: u32,
+        received: u32,
+        avg_ms: Option<f64>,
+        loss_percent: f64,
+    ) -> HopSample {
         let mut hop = HopSample::new(index);
         hop.stats.sent = sent;
         hop.stats.received = received;
@@ -478,7 +514,7 @@ mod tests {
         hop.stats.loss_percent = loss_percent;
         hop
     }
-    
+
     #[test]
     fn test_interpret_ok() {
         let engine = InterpretationEngine::new();
@@ -487,54 +523,57 @@ mod tests {
         hop.stats.add_sample(25.0);
         hop.stats.add_sample(22.0);
         hop.ip = Some("192.168.1.1".parse().unwrap());
-        
+
         let interpretation = engine.interpret_hop(&hop, false, &[]);
-        
+
         assert_eq!(interpretation.severity, Severity::Ok);
         assert!(interpretation.headline.contains("Healthy"));
     }
-    
+
     #[test]
     fn test_interpret_loss_at_destination() {
         let engine = InterpretationEngine::new();
         let hop = make_hop(10, 100, 70, Some(50.0), 30.0);
-        
+
         let interpretation = engine.interpret_hop(&hop, true, &[]);
-        
-        assert!(matches!(interpretation.severity, Severity::Critical | Severity::Warning));
+
+        assert!(matches!(
+            interpretation.severity,
+            Severity::Critical | Severity::Warning
+        ));
         assert!(interpretation.headline.contains("30% packet loss"));
     }
-    
+
     #[test]
     fn test_interpret_rate_limited() {
         let engine = InterpretationEngine::new();
         let hop = make_hop(5, 100, 80, Some(20.0), 20.0);
         let next_hop = make_hop(6, 100, 99, Some(22.0), 1.0);
-        
+
         let interpretation = engine.interpret_hop(&hop, false, &[&next_hop]);
-        
+
         assert_eq!(interpretation.severity, Severity::Warning);
         assert!(interpretation.headline.contains("rate-limiting"));
     }
-    
+
     #[test]
     fn test_generate_summary_ok() {
         let engine = InterpretationEngine::new();
-        
+
         let mut hops = vec![
             make_hop(1, 10, 10, Some(5.0), 0.0),
             make_hop(2, 10, 10, Some(15.0), 0.0),
             make_hop(3, 10, 10, Some(25.0), 0.0),
         ];
-        
+
         // Add interpretations
         for hop in &mut hops {
             hop.interpretation = Some(engine.interpret_hop(hop, hop.index == 3, &[]));
             hop.status = hop.interpretation.as_ref().unwrap().severity;
         }
-        
+
         let summary = engine.generate_summary(&hops);
-        
+
         assert_eq!(summary.overall_status, Severity::Ok);
         assert!(summary.destination_reachable);
     }

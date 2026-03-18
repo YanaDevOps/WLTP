@@ -1,17 +1,17 @@
 //! Tauri commands for frontend communication
-//! 
+//!
 //! This module provides the command interface between the Rust backend
 //! and the TypeScript frontend.
 
 use crate::interpretation::InterpretationEngine;
-use crate::traceroute::{TraceError, TraceRunner};
+use crate::traceroute::TraceRunner;
 use crate::types::*;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, State};
 use tokio::sync::{mpsc, Mutex, RwLock};
-use tracing::{debug, error, info};
+use tracing::{error, info};
 
 /// Application state
 pub struct AppState {
@@ -48,32 +48,29 @@ pub async fn resolve_host(target: String) -> Result<String, String> {
 #[tauri::command]
 pub async fn start_trace(
     app: AppHandle,
-    state: State<'_, AppState>,
+    state: State<'_, Arc<AppState>>,
     config: TraceConfig,
 ) -> Result<TraceSession, String> {
     info!("Starting trace to: {}", config.target);
-    
-    // Create session
+
     let mut session = TraceSession::new(config.clone());
-    
-    // Create runner
+
     let runner = match TraceRunner::new(&session) {
-        Ok(r) => r,
-        Err(e) => {
+        Ok(runner) => runner,
+        Err(err) => {
             session.state = SessionState::Error;
-            session.error = Some(e.to_string());
-            return Err(e.to_string());
+            session.error = Some(err.to_string());
+            return Err(err.to_string());
         }
     };
-    
+
     session.target_ip = Some(runner.target_ip());
     session.state = SessionState::Running;
     session.started_at = Some(chrono::Utc::now());
-    
+
     let session_id = session.id.clone();
     let cancel_flag = Arc::new(AtomicBool::new(true));
-    
-    // Store session
+
     {
         let mut sessions = state.sessions.write().await;
         sessions.insert(
@@ -84,26 +81,23 @@ pub async fn start_trace(
             },
         );
     }
-    
-    // Emit session started event
-    app.emit("trace-event", TraceEvent::SessionStarted {
-        session: session.clone(),
-    }).map_err(|e| e.to_string())?;
-    
-    // Spawn trace task
+
+    app.emit(
+        "trace-event",
+        TraceEvent::SessionStarted {
+            session: session.clone(),
+        },
+    )
+    .map_err(|e| e.to_string())?;
+
     let app_clone = app.clone();
     let state_clone = state.inner().clone();
     let session_id_clone = session_id.clone();
-    
+
     tokio::spawn(async move {
-        run_trace_task(
-            app_clone,
-            state_clone,
-            session_id_clone,
-            cancel_flag,
-        ).await;
+        run_trace_task(app_clone, state_clone, session_id_clone, cancel_flag).await;
     });
-    
+
     Ok(session)
 }
 
@@ -112,84 +106,85 @@ async fn run_trace_task(
     app: AppHandle,
     state: Arc<AppState>,
     session_id: String,
-    cancel_flag: Arc<AtomicBool>,
+    _cancel_flag: Arc<AtomicBool>,
 ) {
     let runner = {
         let sessions = state.sessions.read().await;
-        sessions.get(&session_id).map(|s| s.runner.clone())
+        sessions
+            .get(&session_id)
+            .map(|session| session.runner.clone())
     };
-    
+
     let Some(runner) = runner else {
         error!("Session not found: {}", session_id);
         return;
     };
-    
+
     let Some(mut runner_guard) = runner.lock().await.take() else {
         error!("Runner already taken for session: {}", session_id);
         return;
     };
-    
+
     let (tx, mut rx) = mpsc::channel::<TraceEvent>(100);
     let session_id_clone = session_id.clone();
-    
-    // Spawn event forwarder
+
     let app_clone = app.clone();
     tokio::spawn(async move {
         while let Some(event) = rx.recv().await {
-            if let Err(e) = app_clone.emit("trace-event", &event) {
-                error!("Failed to emit event: {}", e);
+            if let Err(err) = app_clone.emit("trace-event", &event) {
+                error!("Failed to emit event: {}", err);
             }
         }
     });
-    
-    // Run the trace
+
     let result = runner_guard.run(tx).await;
-    
-    // Get final hop data
     let hops = runner_guard.get_hops();
-    
-    // Generate summary
+
     let engine = &state.engine;
-    let mut hops_with_interpretation: Vec<HopSample> = hops
+    let hops_with_interpretation: Vec<HopSample> = hops
         .iter()
         .enumerate()
-        .map(|(i, hop)| {
-            let is_destination = i == hops.len() - 1;
-            let next_hops: Vec<&HopSample> = hops.iter().skip(i + 1).collect();
+        .map(|(index, hop)| {
+            let is_destination = index == hops.len().saturating_sub(1);
+            let next_hops: Vec<&HopSample> = hops.iter().skip(index + 1).collect();
             let mut hop = hop.clone();
             hop.interpretation = Some(engine.interpret_hop(&hop, is_destination, &next_hops));
             hop.status = hop.interpretation.as_ref().unwrap().severity;
             hop
         })
         .collect();
-    
+
     let summary = engine.generate_summary(&hops_with_interpretation);
-    
-    // Update session state
+
     {
         let mut sessions = state.sessions.write().await;
         sessions.remove(&session_id);
     }
-    
-    // Emit completion event
+
     match result {
         Ok(()) => {
             info!("Trace completed: {}", session_id);
-            if let Err(e) = app.emit("trace-event", TraceEvent::SessionCompleted {
-                session_id: session_id_clone,
-                summary,
-                hops: hops_with_interpretation,
-            }) {
-                error!("Failed to emit completion event: {}", e);
+            if let Err(err) = app.emit(
+                "trace-event",
+                TraceEvent::SessionCompleted {
+                    session_id: session_id_clone,
+                    summary,
+                    hops: hops_with_interpretation,
+                },
+            ) {
+                error!("Failed to emit completion event: {}", err);
             }
         }
-        Err(e) => {
-            error!("Trace error: {}", e);
-            if let Err(e) = app.emit("trace-event", TraceEvent::SessionError {
-                session_id: session_id_clone,
-                error: e.to_string(),
-            }) {
-                error!("Failed to emit error event: {}", e);
+        Err(err) => {
+            error!("Trace error: {}", err);
+            if let Err(emit_err) = app.emit(
+                "trace-event",
+                TraceEvent::SessionError {
+                    session_id: session_id_clone,
+                    error: err.to_string(),
+                },
+            ) {
+                error!("Failed to emit error event: {}", emit_err);
             }
         }
     }
@@ -197,53 +192,46 @@ async fn run_trace_task(
 
 /// Stop a running trace session
 #[tauri::command]
-pub async fn stop_trace(
-    state: State<'_, AppState>,
-    session_id: String,
-) -> Result<(), String> {
+pub async fn stop_trace(state: State<'_, Arc<AppState>>, session_id: String) -> Result<(), String> {
     info!("Stopping trace: {}", session_id);
-    
+
     let sessions = state.sessions.read().await;
-    
+
     if let Some(session) = sessions.get(&session_id) {
         session.cancel_flag.store(false, Ordering::Relaxed);
-        
-        // Wake up the runner to check the flag
-        if let Some(runner) = session.runner.try_lock().as_deref_mut() {
-            if let Some(r) = runner {
-                r.stop();
+
+        if let Ok(mut runner_guard) = session.runner.try_lock() {
+            if let Some(runner) = runner_guard.as_mut() {
+                runner.stop();
             }
         }
     }
-    
+
     Ok(())
 }
 
 /// Get current hop data for a session
 #[tauri::command]
 pub async fn get_session_hops(
-    state: State<'_, AppState>,
+    state: State<'_, Arc<AppState>>,
     session_id: String,
 ) -> Result<Vec<HopSample>, String> {
     let sessions = state.sessions.read().await;
-    
+
     if let Some(session) = sessions.get(&session_id) {
-        if let Some(runner_guard) = session.runner.try_lock() {
+        if let Ok(runner_guard) = session.runner.try_lock() {
             if let Some(runner) = runner_guard.as_ref() {
                 return Ok(runner.get_hops());
             }
         }
     }
-    
+
     Err("Session not found or not running".to_string())
 }
 
 /// Generate interpretation for a set of hops
 #[tauri::command]
-pub fn interpret_hops(
-    state: State<'_, AppState>,
-    hops: Vec<HopSample>,
-) -> SessionSummary {
+pub fn interpret_hops(state: State<'_, Arc<AppState>>, hops: Vec<HopSample>) -> SessionSummary {
     state.engine.generate_summary(&hops)
 }
 
@@ -261,14 +249,14 @@ pub async fn export_json(
         config: TraceConfig,
         exported_at: chrono::DateTime<chrono::Utc>,
     }
-    
+
     let data = ExportData {
         summary,
         hops,
         config,
         exported_at: chrono::Utc::now(),
     };
-    
+
     serde_json::to_string_pretty(&data).map_err(|e| e.to_string())
 }
 
@@ -281,79 +269,122 @@ pub async fn export_html(
 ) -> Result<String, String> {
     let target = &config.target;
     let timestamp = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC");
-    
+
     let status_color = match summary.overall_status {
         Severity::Ok => "#22c55e",
         Severity::Warning => "#eab308",
         Severity::Critical => "#ef4444",
         Severity::Unknown => "#6b7280",
     };
-    
+
     let status_text = match summary.overall_status {
         Severity::Ok => "OK",
         Severity::Warning => "Warning",
         Severity::Critical => "Critical",
         Severity::Unknown => "Unknown",
     };
-    
-    // Generate hop rows
-    let hop_rows = hops.iter().map(|hop| {
-        let hop_status_color = match hop.status {
-            Severity::Ok => "#22c55e",
-            Severity::Warning => "#eab308",
-            Severity::Critical => "#ef4444",
-            Severity::Unknown => "#6b7280",
-        };
-        
-        let ip = hop.ip.map(|ip| ip.to_string()).unwrap_or_else(|| "*".to_string());
-        let hostname = hop.hostname.as_deref().unwrap_or(&ip);
-        
-        let loss = format!("{:.1}%", hop.stats.loss_percent);
-        let sent = hop.stats.sent.to_string();
-        let recv = hop.stats.received.to_string();
-        let best = hop.stats.best_ms.map(|v| format!("{:.1}", v)).unwrap_or("-".to_string());
-        let avg = hop.stats.avg_ms.map(|v| format!("{:.1}", v)).unwrap_or("-".to_string());
-        let worst = hop.stats.worst_ms.map(|v| format!("{:.1}", v)).unwrap_or("-".to_string());
-        let last = hop.stats.last_ms.map(|v| format!("{:.1}", v)).unwrap_or("-".to_string());
-        let jitter = hop.stats.jitter_ms.map(|v| format!("{:.1}", v)).unwrap_or("-".to_string());
-        
-        let interpretation = hop.interpretation.as_ref();
-        let headline = interpretation.map(|i| i.headline.clone()).unwrap_or_default();
-        let explanation = interpretation.map(|i| i.explanation.clone()).unwrap_or_default();
-        
-        format!(
-            r#"<tr>
-                <td style="text-align: center; color: {};">●</td>
-                <td>{}</td>
-                <td title="{}">{}</td>
-                <td>{}</td>
-                <td>{}</td>
-                <td>{}</td>
-                <td>{}</td>
-                <td>{}</td>
-                <td>{}</td>
-                <td>{}</td>
-                <td><strong>{}</strong><br/><small style="color: #666;">{}</small></td>
+
+    let hop_rows = hops
+        .iter()
+        .map(|hop| {
+            let hop_status_color = match hop.status {
+                Severity::Ok => "#22c55e",
+                Severity::Warning => "#eab308",
+                Severity::Critical => "#ef4444",
+                Severity::Unknown => "#6b7280",
+            };
+
+            let ip = hop
+                .ip
+                .map(|ip| ip.to_string())
+                .unwrap_or_else(|| "*".to_string());
+            let hostname = hop.hostname.as_deref().unwrap_or(&ip);
+
+            let loss = format!("{:.1}%", hop.stats.loss_percent);
+            let sent = hop.stats.sent.to_string();
+            let recv = hop.stats.received.to_string();
+            let best = hop
+                .stats
+                .best_ms
+                .map(|v| format!("{:.1}", v))
+                .unwrap_or("-".to_string());
+            let avg = hop
+                .stats
+                .avg_ms
+                .map(|v| format!("{:.1}", v))
+                .unwrap_or("-".to_string());
+            let worst = hop
+                .stats
+                .worst_ms
+                .map(|v| format!("{:.1}", v))
+                .unwrap_or("-".to_string());
+            let last = hop
+                .stats
+                .last_ms
+                .map(|v| format!("{:.1}", v))
+                .unwrap_or("-".to_string());
+            let jitter = hop
+                .stats
+                .jitter_ms
+                .map(|v| format!("{:.1}", v))
+                .unwrap_or("-".to_string());
+
+            let interpretation = hop.interpretation.as_ref();
+            let headline = interpretation
+                .map(|item| item.headline.clone())
+                .unwrap_or_default();
+            let explanation = interpretation
+                .map(|item| item.explanation.clone())
+                .unwrap_or_default();
+
+            format!(
+                r#"<tr>
+                <td style="text-align: center; color: {hop_status_color};">&#9679;</td>
+                <td>{hop_index}</td>
+                <td title="{ip}">{hostname}</td>
+                <td>{loss}</td>
+                <td>{sent}</td>
+                <td>{recv}</td>
+                <td>{best}</td>
+                <td>{avg}</td>
+                <td>{worst}</td>
+                <td>{last}</td>
+                <td>{jitter}</td>
+                <td><strong>{headline}</strong><br/><small style="color: #666;">{explanation}</small></td>
             </tr>"#,
-            hop_status_color,
-            hop.index,
-            ip, hostname,
-            loss, sent, recv,
-            best, avg, worst, last, jitter,
-            headline, explanation
-        )
-    }).collect::<Vec<_>>().join("\n");
-    
-    // Generate findings list
-    let findings = summary.secondary_findings.iter().map(|f| {
-        format!("<li>{}</li>", f)
-    }).collect::<Vec<_>>().join("\n");
-    
-    // Generate recommendations
-    let recommendations = summary.recommended_next_steps.iter().map(|r| {
-        format!("<li>{}</li>", r)
-    }).collect::<Vec<_>>().join("\n");
-    
+                hop_status_color = hop_status_color,
+                hop_index = hop.index,
+                ip = ip,
+                hostname = hostname,
+                loss = loss,
+                sent = sent,
+                recv = recv,
+                best = best,
+                avg = avg,
+                worst = worst,
+                last = last,
+                jitter = jitter,
+                headline = headline,
+                explanation = explanation,
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let findings = summary
+        .secondary_findings
+        .iter()
+        .map(|finding| format!("<li>{}</li>", finding))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let recommendations = summary
+        .recommended_next_steps
+        .iter()
+        .map(|recommendation| format!("<li>{}</li>", recommendation))
+        .collect::<Vec<_>>()
+        .join("\n");
+
     let html = format!(
         r#"<!DOCTYPE html>
 <html lang="en">
@@ -394,7 +425,7 @@ pub async fn export_html(
                 Target: <strong>{}</strong> | Generated: {}
             </div>
         </div>
-        
+
         <div class="summary">
             <h2>Summary</h2>
             <div class="primary-finding">{}</div>
@@ -413,7 +444,7 @@ pub async fn export_html(
                 </div>
             </div>
         </div>
-        
+
         <div class="hops">
             <h2>Route Details</h2>
             <table>
@@ -438,7 +469,7 @@ pub async fn export_html(
                 </tbody>
             </table>
         </div>
-        
+
         <div class="footer">
             Generated by WLTP - Modern WinMTR for Windows/macOS
         </div>
@@ -447,42 +478,29 @@ pub async fn export_html(
 </html>"#,
         target,
         status_color,
-        status_color, status_text,
-        target, timestamp,
+        status_color,
+        status_text,
+        target,
+        timestamp,
         summary.primary_finding,
         findings,
         recommendations,
         hop_rows
     );
-    
+
     Ok(html)
 }
 
 /// Save content to a file
 #[tauri::command]
 pub async fn save_file(
-    app: AppHandle,
-    content: String,
-    default_name: String,
-    filter_name: String,
-    filter_extensions: Vec<String>,
+    _app: AppHandle,
+    _content: String,
+    _default_name: String,
+    _filter_name: String,
+    _filter_extensions: Vec<String>,
 ) -> Result<String, String> {
-    use tauri_plugin_dialog::DialogExt;
-    
-    let file_path = app.dialog()
-        .file()
-        .set_file_name(&default_name)
-        .add_filter(&filter_name, &filter_extensions)
-        .blocking_save_file();
-    
-    match file_path {
-        Some(path) => {
-            std::fs::write(&path, content)
-                .map(|_| path.to_string())
-                .map_err(|e| e.to_string())
-        }
-        None => Err("Save cancelled".to_string()),
-    }
+    Err("save_file is not supported in this build".to_string())
 }
 
 /// Read app settings
@@ -493,7 +511,7 @@ pub async fn get_settings() -> Settings {
 
 /// Update app settings
 #[tauri::command]
-pub async fn update_settings(settings: Settings) -> Result<(), String> {
+pub async fn update_settings(_settings: Settings) -> Result<(), String> {
     // TODO: Persist settings to disk
     Ok(())
 }

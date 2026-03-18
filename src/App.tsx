@@ -144,9 +144,9 @@ function App() {
   }, [session]);
 
   const handleExportHtml = useCallback(async () => {
-    if (!session) return;
+    if (!session || !summary) return;
     try {
-      const html = await exportHtml(session.id);
+      const html = await exportHtml(summary, hops, session.config);
       const blob = new Blob([html], { type: 'text/html' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -157,12 +157,12 @@ function App() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [session, target]);
+  }, [hops, session, summary, target]);
 
   const handleExportJson = useCallback(async () => {
-    if (!session) return;
+    if (!session || !summary) return;
     try {
-      const json = await exportJson(session.id);
+      const json = await exportJson(summary, hops, session.config);
       const blob = new Blob([json], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -173,7 +173,7 @@ function App() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [session, target]);
+  }, [hops, session, summary, target]);
 
   const handleSettingsChange = useCallback(async (newSettings: Settings) => {
     setSettings(newSettings);
