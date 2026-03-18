@@ -126,7 +126,10 @@ function App() {
     };
 
     try {
-      await startTrace(config);
+      const startedSession = await startTrace(config);
+      setSession(startedSession);
+      setIsRunning(true);
+      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }

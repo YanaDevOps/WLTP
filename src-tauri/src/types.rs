@@ -31,6 +31,7 @@ pub enum ProtocolMode {
 
 /// Configuration for a trace session
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TraceConfig {
     /// Target hostname or IP address
     pub target: String,
@@ -98,6 +99,7 @@ pub enum SessionState {
 
 /// A single trace session
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TraceSession {
     /// Unique session identifier
     pub id: String,
@@ -131,6 +133,7 @@ impl TraceSession {
 
 /// Statistics for a single hop
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct HopStats {
     /// Number of packets sent
     pub sent: u32,
@@ -216,6 +219,7 @@ impl HopStats {
 
 /// A single hop in the trace route
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct HopSample {
     /// Hop index (1-based, as shown in traceroute)
     pub index: u8,
@@ -246,6 +250,7 @@ impl HopSample {
 
 /// Interpretation of a hop's behavior
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct HopInterpretation {
     /// Severity level
     pub severity: Severity,
@@ -261,6 +266,7 @@ pub struct HopInterpretation {
 
 /// Overall session summary
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SessionSummary {
     /// Overall status of the route
     pub overall_status: Severity,
@@ -296,31 +302,51 @@ pub enum TraceEvent {
     /// Session has started
     SessionStarted { session: TraceSession },
     /// A new hop was discovered
-    HopDiscovered { session_id: String, hop: HopSample },
+    HopDiscovered {
+        #[serde(rename = "sessionId")]
+        session_id: String,
+        hop: HopSample,
+    },
     /// A hop received a response
     HopResponse {
+        #[serde(rename = "sessionId")]
         session_id: String,
+        #[serde(rename = "hopIndex")]
         hop_index: u8,
+        #[serde(rename = "latencyMs")]
         latency_ms: f64,
     },
     /// A hop timed out
-    HopTimeout { session_id: String, hop_index: u8 },
+    HopTimeout {
+        #[serde(rename = "sessionId")]
+        session_id: String,
+        #[serde(rename = "hopIndex")]
+        hop_index: u8,
+    },
     /// Statistics updated for a hop
     HopStatsUpdate {
+        #[serde(rename = "sessionId")]
         session_id: String,
+        #[serde(rename = "hopIndex")]
         hop_index: u8,
         stats: HopStats,
     },
     /// Session completed
     SessionCompleted {
+        #[serde(rename = "sessionId")]
         session_id: String,
         summary: SessionSummary,
         hops: Vec<HopSample>,
     },
     /// Session encountered an error
-    SessionError { session_id: String, error: String },
+    SessionError {
+        #[serde(rename = "sessionId")]
+        session_id: String,
+        error: String,
+    },
     /// DNS resolution result
     DnsResolved {
+        #[serde(rename = "sessionId")]
         session_id: String,
         hostname: String,
         ip: IpAddr,

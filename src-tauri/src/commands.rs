@@ -236,6 +236,7 @@ pub async fn export_json(
     config: TraceConfig,
 ) -> Result<String, String> {
     #[derive(serde::Serialize)]
+    #[serde(rename_all = "camelCase")]
     struct ExportData {
         summary: SessionSummary,
         hops: Vec<HopSample>,
@@ -511,6 +512,7 @@ pub async fn update_settings(_settings: Settings) -> Result<(), String> {
 
 /// Application settings
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Settings {
     pub theme: Theme,
     pub explanation_level: ExplanationLevel,
