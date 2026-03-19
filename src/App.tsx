@@ -494,8 +494,8 @@ function MainView({
               </thead>
 
               <tbody className="divide-y divide-orange-100 bg-white/90 dark:divide-stone-800 dark:bg-stone-950/80">
-                {hops.map((hop) => (
-                  <HopRow key={hop.index} hop={hop} />
+                {hops.map((hop, index) => (
+                  <HopRow key={hop.index} hop={hop} isDestination={index === hops.length - 1} />
                 ))}
               </tbody>
             </table>
@@ -615,7 +615,7 @@ function SummaryCard({ summary, copy }: { summary: SessionSummary; copy: UICopy 
   );
 }
 
-function HopRow({ hop }: { hop: HopSample }) {
+function HopRow({ hop, isDestination }: { hop: HopSample; isDestination: boolean }) {
   const statusColors: Record<string, string> = {
     ok: 'bg-green-500',
     warning: 'bg-amber-500',
@@ -632,29 +632,56 @@ function HopRow({ hop }: { hop: HopSample }) {
 
   const hostDisplay = hop.hostname || hop.ip || '*';
   const ipDisplay = hop.ip && hop.hostname ? hop.ip : '';
+  const destinationHealthy = isDestination && hop.stats.lossPercent === 0;
+  const destinationProblem = isDestination && hop.stats.lossPercent > 0;
+  const destinationAccentClass = destinationHealthy
+    ? 'text-emerald-700 dark:text-emerald-400'
+    : destinationProblem
+      ? 'font-bold text-rose-700 dark:text-rose-400'
+      : '';
 
   return (
     <tr className="transition-colors hover:bg-orange-50/70 dark:hover:bg-stone-900/80">
       <td className="whitespace-nowrap px-1.5 py-1 pr-2">
         <span className={`inline-block h-1.5 w-1.5 rounded-full ${statusColors[hop.status]}`} />
       </td>
-      <td className="whitespace-nowrap px-1 py-1.5 pl-2 text-[12px] font-semibold text-stone-900 dark:text-stone-100">
+      <td
+        className={`whitespace-nowrap px-1 py-1.5 pl-2 text-[12px] font-semibold text-stone-900 dark:text-stone-100 ${destinationAccentClass}`}
+      >
         {hop.index}
       </td>
       <td className="px-1 pr-0.5 py-1 whitespace-nowrap">
-        <div className="max-w-[14rem] text-[12px]">
-          <div className="truncate font-medium text-stone-900 dark:text-stone-100">
+        <div className={`max-w-[14rem] text-[12px] ${destinationAccentClass}`}>
+          <div className="truncate font-medium">
             {hostDisplay}
           </div>
           {ipDisplay && (
-            <div className="truncate text-[10px] text-stone-500 dark:text-stone-400">
+            <div
+              className={`truncate text-[10px] ${
+                destinationHealthy
+                  ? 'text-emerald-600/90 dark:text-emerald-400/90'
+                  : destinationProblem
+                    ? 'font-semibold text-rose-600/90 dark:text-rose-400/90'
+                    : 'text-stone-500 dark:text-stone-400'
+              }`}
+            >
               {ipDisplay}
             </div>
           )}
         </div>
       </td>
       <td className="whitespace-nowrap px-1 py-1.5 pl-0.5 text-right text-[11px] tabular-nums">
-        <span className={hop.stats.lossPercent > 5 ? 'font-semibold text-rose-600 dark:text-rose-400' : ''}>
+        <span
+          className={
+            destinationHealthy
+              ? 'font-semibold text-emerald-700 dark:text-emerald-400'
+              : destinationProblem
+                ? 'font-bold text-rose-700 dark:text-rose-400'
+                : hop.stats.lossPercent > 5
+                  ? 'font-semibold text-rose-600 dark:text-rose-400'
+                  : ''
+          }
+        >
           {hop.stats.lossPercent.toFixed(1)}%
         </span>
       </td>
