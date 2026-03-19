@@ -3,8 +3,8 @@
 //! This module implements a rule-based engine that analyzes hop statistics
 //! and provides human-readable interpretations of network issues.
 
+use crate::commands::ExplanationLevel;
 use crate::types::*;
-use std::net::IpAddr;
 
 /// Interpretation rules engine
 pub struct InterpretationEngine {
@@ -37,6 +37,27 @@ impl InterpretationEngine {
         Self::default()
     }
 
+    pub fn annotate_hops(&self, hops: &[HopSample], level: ExplanationLevel) -> Vec<HopSample> {
+        hops.iter()
+            .enumerate()
+            .map(|(index, hop)| {
+                let is_destination = index == hops.len().saturating_sub(1);
+                let next_hops: Vec<&HopSample> = hops.iter().skip(index + 1).collect();
+                let mut hop = hop.clone();
+                hop.interpretation = Some(self.interpret_hop_with_level(
+                    &hop,
+                    is_destination,
+                    &next_hops,
+                    level.clone(),
+                ));
+                if let Some(interpretation) = &hop.interpretation {
+                    hop.status = interpretation.severity;
+                }
+                hop
+            })
+            .collect()
+    }
+
     /// Interpret a single hop based on its statistics and context
     pub fn interpret_hop(
         &self,
@@ -44,34 +65,44 @@ impl InterpretationEngine {
         is_destination: bool,
         next_hops: &[&HopSample],
     ) -> HopInterpretation {
+        self.interpret_hop_with_level(hop, is_destination, next_hops, ExplanationLevel::Detailed)
+    }
+
+    pub fn interpret_hop_with_level(
+        &self,
+        hop: &HopSample,
+        is_destination: bool,
+        next_hops: &[&HopSample],
+        level: ExplanationLevel,
+    ) -> HopInterpretation {
         let stats = &hop.stats;
 
         // No responses at all
-        if stats.received == 0 && stats.sent > 3 {
-            return self.interpret_no_response(hop, is_destination, next_hops);
+        if stats.received == 0 && stats.sent >= 3 {
+            return self.interpret_no_response(hop, is_destination, next_hops, level);
         }
 
         // Check for loss
         if stats.loss_percent > self.loss_warning_threshold {
-            return self.interpret_loss(hop, is_destination, next_hops);
+            return self.interpret_loss(hop, is_destination, next_hops, level);
         }
 
         // Check for high latency
         if let Some(avg) = stats.avg_ms {
             if avg > self.latency_warning_threshold {
-                return self.interpret_high_latency(hop, is_destination, next_hops);
+                return self.interpret_high_latency(hop, is_destination, next_hops, level);
             }
         }
 
         // Check for high jitter
         if let Some(jitter) = stats.jitter_ms {
             if jitter > self.jitter_warning_threshold {
-                return self.interpret_high_jitter(hop, is_destination);
+                return self.interpret_high_jitter(hop, is_destination, level);
             }
         }
 
         // Everything looks good
-        self.interpret_ok(hop, is_destination)
+        self.interpret_ok(hop, is_destination, level)
     }
 
     fn interpret_no_response(
@@ -79,6 +110,7 @@ impl InterpretationEngine {
         hop: &HopSample,
         is_destination: bool,
         next_hops: &[&HopSample],
+        level: ExplanationLevel,
     ) -> HopInterpretation {
         // Check if subsequent hops are responding
         let later_hops_ok = next_hops
@@ -86,41 +118,50 @@ impl InterpretationEngine {
             .any(|h| h.stats.received > 0 && h.stats.loss_percent < 10.0);
 
         if is_destination {
-            HopInterpretation {
-                severity: Severity::Critical,
-                headline: "Destination not responding".to_string(),
-                explanation: "The target server is not responding to ICMP (ping) requests. This could indicate the server is down, a firewall is blocking ICMP, or there's a network issue at the destination.".to_string(),
-                probable_causes: vec![
-                    "Server is down or unreachable".to_string(),
-                    "Firewall blocking ICMP traffic".to_string(),
-                    "Network outage at destination".to_string(),
+            self.message(
+                level,
+                Severity::Critical,
+                "Target is not replying",
+                "This address did not answer ping at all. Usually that means the host is down, blocks ping, or the route cannot reach it.",
+                "Destination not responding",
+                "The target server is not responding to ICMP (ping) requests. This could indicate the server is down, a firewall is blocking ICMP, or there's a network issue at the destination.",
+                vec![
+                    "The server may be offline".to_string(),
+                    "A firewall may be blocking ping replies".to_string(),
+                    "The route may not be reaching the destination".to_string(),
                 ],
-                confidence: 0.9,
-            }
+                0.9,
+            )
         } else if later_hops_ok {
-            HopInterpretation {
-                severity: Severity::Unknown,
-                headline: "Hop not responding (may be normal)".to_string(),
-                explanation: "This intermediate router is not responding to ICMP requests, but traffic is still reaching later hops. Many routers are configured to deprioritize or block ICMP responses while continuing to forward traffic normally.".to_string(),
-                probable_causes: vec![
-                    "Router configured to rate-limit or block ICMP".to_string(),
-                    "Router prioritizing traffic over management responses".to_string(),
-                    "ICMP filtering at this hop".to_string(),
+            self.message(
+                level,
+                Severity::Unknown,
+                "This hop ignores ping replies",
+                "This router is not answering, but later hops still reply. That usually means the router hides ping responses and is not the real problem.",
+                "Hop not responding (may be normal)",
+                "This intermediate router is not responding to ICMP requests, but traffic is still reaching later hops. Many routers are configured to deprioritize or block ICMP responses while continuing to forward traffic normally.",
+                vec![
+                    "The router may be rate-limiting ping".to_string(),
+                    "This device may deprioritize control traffic".to_string(),
+                    "ICMP could be filtered at this hop".to_string(),
                 ],
-                confidence: 0.85,
-            }
+                0.85,
+            )
         } else {
-            HopInterpretation {
-                severity: Severity::Critical,
-                headline: "Connection lost at this hop".to_string(),
-                explanation: "Network connectivity is being lost at or before this hop, and subsequent hops are also not responding. This suggests a real connectivity issue rather than ICMP filtering.".to_string(),
-                probable_causes: vec![
-                    "Network outage or hardware failure".to_string(),
-                    "Routing misconfiguration".to_string(),
-                    "Severe congestion causing packet drops".to_string(),
+            self.message(
+                level,
+                Severity::Critical,
+                "Traffic likely stops here",
+                "This hop and the ones after it are not replying. That usually means the route breaks at this point or just before it.",
+                "Connection lost at this hop",
+                "Network connectivity is being lost at or before this hop, and subsequent hops are also not responding. This suggests a real connectivity issue rather than ICMP filtering.",
+                vec![
+                    "A router or link may be down".to_string(),
+                    "Routing may be broken at this point".to_string(),
+                    "Heavy congestion may be dropping packets".to_string(),
                 ],
-                confidence: 0.75,
-            }
+                0.75,
+            )
         }
     }
 
@@ -129,6 +170,7 @@ impl InterpretationEngine {
         hop: &HopSample,
         is_destination: bool,
         next_hops: &[&HopSample],
+        level: ExplanationLevel,
     ) -> HopInterpretation {
         let loss_percent = hop.stats.loss_percent;
 
@@ -143,17 +185,20 @@ impl InterpretationEngine {
             && next_hops.iter().all(|h| h.stats.loss_percent < 5.0);
 
         if likely_rate_limited {
-            HopInterpretation {
-                severity: Severity::Warning,
-                headline: format!("{:.0}% packet loss (likely rate-limiting)", loss_percent),
-                explanation: "This hop shows packet loss, but subsequent hops and the destination are responding normally. This is typically caused by ICMP rate limiting, where the router deliberately slows down its responses to prevent overload.".to_string(),
-                probable_causes: vec![
-                    "ICMP rate limiting on router".to_string(),
-                    "Router CPU/memory constraints".to_string(),
-                    "Low priority for control plane traffic".to_string(),
+            self.message(
+                level,
+                Severity::Warning,
+                &format!("{:.0}% loss here is probably harmless", loss_percent),
+                "This hop drops ping replies, but later hops are healthy. Usually the router is limiting ping responses rather than dropping real traffic.",
+                &format!("{:.0}% packet loss (likely rate-limiting)", loss_percent),
+                "This hop shows packet loss, but subsequent hops and the destination are responding normally. This is typically caused by ICMP rate limiting, where the router deliberately slows down its responses to prevent overload.",
+                vec![
+                    "The router may be rate-limiting ICMP".to_string(),
+                    "This device may give low priority to ping replies".to_string(),
+                    "The control plane could be busy even while forwarding stays normal".to_string(),
                 ],
-                confidence: 0.8,
-            }
+                0.8,
+            )
         } else if is_destination {
             let severity = if loss_percent > self.loss_critical_threshold {
                 Severity::Critical
@@ -161,43 +206,52 @@ impl InterpretationEngine {
                 Severity::Warning
             };
 
-            HopInterpretation {
+            self.message(
+                level,
                 severity,
-                headline: format!("{:.0}% packet loss to destination", loss_percent),
-                explanation: "The target server is experiencing significant packet loss. This indicates a real connectivity issue that will affect application performance.".to_string(),
-                probable_causes: vec![
-                    "Network congestion between you and the server".to_string(),
-                    "Server overload or capacity issues".to_string(),
-                    "Unstable network connection".to_string(),
-                    "ISP routing problems".to_string(),
+                &format!("{:.0}% packet loss to the target", loss_percent),
+                "Some packets reach the target and some do not. Apps may feel slow, disconnect, or retry.",
+                &format!("{:.0}% packet loss to destination", loss_percent),
+                "The target server is experiencing significant packet loss. This indicates a real connectivity issue that will affect application performance.",
+                vec![
+                    "There may be congestion between you and the target".to_string(),
+                    "The target may be overloaded".to_string(),
+                    "Your connection may be unstable".to_string(),
+                    "An ISP or routing issue may be involved".to_string(),
                 ],
-                confidence: 0.9,
-            }
+                0.9,
+            )
         } else if loss_continues {
-            HopInterpretation {
-                severity: Severity::Warning,
-                headline: format!("{:.0}% packet loss starting here", loss_percent),
-                explanation: "Packet loss begins at this hop and continues to subsequent hops. This suggests a genuine network issue at this point in the route.".to_string(),
-                probable_causes: vec![
-                    "Network congestion at this segment".to_string(),
-                    "Hardware issue at this router".to_string(),
-                    "Link capacity exceeded".to_string(),
-                    "ISP peering issues".to_string(),
+            self.message(
+                level,
+                Severity::Warning,
+                &format!("{:.0}% loss starts at this hop", loss_percent),
+                "Packet loss begins here and keeps showing up later. This usually points to a real problem on this link or router.",
+                &format!("{:.0}% packet loss starting here", loss_percent),
+                "Packet loss begins at this hop and continues to subsequent hops. This suggests a genuine network issue at this point in the route.",
+                vec![
+                    "There may be congestion on this segment".to_string(),
+                    "This router or link may have a fault".to_string(),
+                    "Link capacity may be saturated".to_string(),
+                    "ISP peering could be unstable".to_string(),
                 ],
-                confidence: 0.75,
-            }
+                0.75,
+            )
         } else {
-            HopInterpretation {
-                severity: Severity::Warning,
-                headline: format!("{:.0}% packet loss at intermediate hop", loss_percent),
-                explanation: "This intermediate hop shows packet loss, but subsequent hops appear normal. This could be due to ICMP deprioritization rather than actual traffic loss.".to_string(),
-                probable_causes: vec![
-                    "ICMP rate limiting".to_string(),
-                    "Temporary congestion".to_string(),
-                    "Router load balancing (asymmetric routing)".to_string(),
+            self.message(
+                level,
+                Severity::Warning,
+                &format!("{:.0}% loss only on this router", loss_percent),
+                "Later hops look normal, so this is often ping-reply behavior rather than a real end-to-end loss problem.",
+                &format!("{:.0}% packet loss at intermediate hop", loss_percent),
+                "This intermediate hop shows packet loss, but subsequent hops appear normal. This could be due to ICMP deprioritization rather than actual traffic loss.",
+                vec![
+                    "ICMP may be rate-limited here".to_string(),
+                    "There may be temporary congestion".to_string(),
+                    "Load balancing can make traceroute look uneven".to_string(),
                 ],
-                confidence: 0.6,
-            }
+                0.6,
+            )
         }
     }
 
@@ -206,20 +260,13 @@ impl InterpretationEngine {
         hop: &HopSample,
         is_destination: bool,
         next_hops: &[&HopSample],
+        level: ExplanationLevel,
     ) -> HopInterpretation {
         let avg = hop.stats.avg_ms.unwrap_or(0.0);
         let is_critical = avg > self.latency_critical_threshold;
 
         // Check if latency increase started at this hop
-        let latency_increase_here = if let Some(prev_hop) = next_hops.first() {
-            if let Some(prev_avg) = prev_hop.stats.avg_ms {
-                avg > prev_avg + 50.0 // Significant increase
-            } else {
-                true
-            }
-        } else {
-            false
-        };
+        let latency_increase_here = !next_hops.is_empty();
 
         // Check if latency continues to destination
         let latency_continues = next_hops.iter().all(|h| {
@@ -236,77 +283,102 @@ impl InterpretationEngine {
         };
 
         if is_destination {
-            HopInterpretation {
+            self.message(
+                level,
                 severity,
-                headline: format!("High latency: {:.0}ms average", avg),
-                explanation: "The destination server is responding with high latency. This will cause noticeable delays in applications and may indicate server load or network issues.".to_string(),
-                probable_causes: vec![
-                    "Server processing delay or overload".to_string(),
-                    "Long geographic distance to server".to_string(),
-                    "Network congestion on final mile".to_string(),
+                &format!("The target is slow to answer ({:.0}ms)", avg),
+                "Replies take longer than normal. Browsing, downloads, calls, or games may feel delayed.",
+                &format!("High latency: {:.0}ms average", avg),
+                "The destination server is responding with high latency. This will cause noticeable delays in applications and may indicate server load or network issues.",
+                vec![
+                    "The target may be overloaded".to_string(),
+                    "The route may cover a long geographic distance".to_string(),
+                    "There may be congestion near the destination".to_string(),
                 ],
-                confidence: 0.85,
-            }
+                0.85,
+            )
         } else if latency_increase_here && latency_continues {
-            HopInterpretation {
+            self.message(
+                level,
                 severity,
-                headline: format!("Latency spike at this hop: {:.0}ms", avg),
-                explanation: "A significant increase in latency begins at this hop and continues to the destination. This identifies the network segment where delays are being introduced.".to_string(),
-                probable_causes: vec![
-                    "Congested network link at this segment".to_string(),
-                    "Long-distance link (crossing continents/oceans)".to_string(),
-                    "Over-subscribed bandwidth at ISP peering point".to_string(),
-                    "VPN or tunnel encapsulation overhead".to_string(),
+                &format!("Delay starts around this hop ({:.0}ms)", avg),
+                "Latency jumps here and stays high later. This is a good suspect link for congestion or distance.",
+                &format!("Latency spike at this hop: {:.0}ms", avg),
+                "A significant increase in latency begins at this hop and continues to the destination. This identifies the network segment where delays are being introduced.",
+                vec![
+                    "This network segment may be congested".to_string(),
+                    "The route may cross a long-distance link".to_string(),
+                    "There may be an oversubscribed peering point".to_string(),
+                    "A tunnel or VPN can add delay here".to_string(),
                 ],
-                confidence: 0.8,
-            }
+                0.8,
+            )
         } else {
-            HopInterpretation {
-                severity: Severity::Warning,
-                headline: format!("Elevated latency: {:.0}ms", avg),
-                explanation: "This hop shows higher than optimal latency. If this is an intermediate hop with normal latency at the destination, it may be due to ICMP deprioritization.".to_string(),
-                probable_causes: vec![
-                    "Router control plane delay".to_string(),
-                    "ICMP processing overhead".to_string(),
-                    "Normal for this network segment".to_string(),
+            self.message(
+                level,
+                Severity::Warning,
+                &format!("This hop replies slowly ({:.0}ms)", avg),
+                "This router is slower to answer ping than the rest of the path. That matters only if the delay continues to the target.",
+                &format!("Elevated latency: {:.0}ms", avg),
+                "This hop shows higher than optimal latency. If this is an intermediate hop with normal latency at the destination, it may be due to ICMP deprioritization.",
+                vec![
+                    "The router control plane may answer slowly".to_string(),
+                    "ICMP processing overhead can inflate this number".to_string(),
+                    "This may be normal for this network segment".to_string(),
                 ],
-                confidence: 0.6,
-            }
+                0.6,
+            )
         }
     }
 
-    fn interpret_high_jitter(&self, hop: &HopSample, is_destination: bool) -> HopInterpretation {
+    fn interpret_high_jitter(
+        &self,
+        hop: &HopSample,
+        is_destination: bool,
+        level: ExplanationLevel,
+    ) -> HopInterpretation {
         let jitter = hop.stats.jitter_ms.unwrap_or(0.0);
 
         if is_destination {
-            HopInterpretation {
-                severity: Severity::Warning,
-                headline: format!("High jitter: {:.0}ms variation", jitter),
-                explanation: "The connection to the destination has high latency variation (jitter). This can cause problems for real-time applications like VoIP, video calls, and gaming, even if average latency is acceptable.".to_string(),
-                probable_causes: vec![
-                    "Network congestion causing variable queue times".to_string(),
-                    "Bufferbloat on router/modem".to_string(),
-                    "Intermittent interference (wireless)".to_string(),
-                    "ISP traffic shaping".to_string(),
+            self.message(
+                level,
+                Severity::Warning,
+                &format!("Latency is unstable ({:.0}ms jitter)", jitter),
+                "Reply time changes a lot from packet to packet. Calls, streams, and games may stutter even if average ping looks okay.",
+                &format!("High jitter: {:.0}ms variation", jitter),
+                "The connection to the destination has high latency variation (jitter). This can cause problems for real-time applications like VoIP, video calls, and gaming, even if average latency is acceptable.",
+                vec![
+                    "There may be congestion causing queue swings".to_string(),
+                    "Bufferbloat on a router or modem is possible".to_string(),
+                    "Wireless interference can cause jitter".to_string(),
+                    "Traffic shaping may be inconsistent".to_string(),
                 ],
-                confidence: 0.8,
-            }
+                0.8,
+            )
         } else {
-            HopInterpretation {
-                severity: Severity::Warning,
-                headline: format!("High jitter detected: {:.0}ms", jitter),
-                explanation: "This hop shows significant latency variation. Jitter at intermediate hops may indicate congestion or variable routing, but only matters if it affects the destination.".to_string(),
-                probable_causes: vec![
-                    "Variable ICMP processing time".to_string(),
-                    "Network congestion bursts".to_string(),
-                    "Load balancing across multiple paths".to_string(),
+            self.message(
+                level,
+                Severity::Warning,
+                &format!("This hop has unstable reply times ({:.0}ms)", jitter),
+                "If later hops stay stable, this is often just how this router answers ping.",
+                &format!("High jitter detected: {:.0}ms", jitter),
+                "This hop shows significant latency variation. Jitter at intermediate hops may indicate congestion or variable routing, but only matters if it affects the destination.",
+                vec![
+                    "ICMP processing time may vary here".to_string(),
+                    "There may be short congestion bursts".to_string(),
+                    "Load balancing across paths can change timings".to_string(),
                 ],
-                confidence: 0.6,
-            }
+                0.6,
+            )
         }
     }
 
-    fn interpret_ok(&self, hop: &HopSample, is_destination: bool) -> HopInterpretation {
+    fn interpret_ok(
+        &self,
+        hop: &HopSample,
+        is_destination: bool,
+        level: ExplanationLevel,
+    ) -> HopInterpretation {
         let avg = hop
             .stats
             .avg_ms
@@ -314,21 +386,57 @@ impl InterpretationEngine {
             .unwrap_or_else(|| "N/A".to_string());
 
         if is_destination {
-            HopInterpretation {
-                severity: Severity::Ok,
-                headline: format!("Destination responding normally ({})", avg),
-                explanation: "The target server is responding with healthy latency and no packet loss. The network path appears to be functioning correctly.".to_string(),
-                probable_causes: vec![],
-                confidence: 0.9,
-            }
+            self.message(
+                level,
+                Severity::Ok,
+                &format!("Target looks healthy ({})", avg),
+                "The destination is replying with little or no loss and normal delay.",
+                &format!("Destination responding normally ({})", avg),
+                "The target server is responding with healthy latency and no packet loss. The network path appears to be functioning correctly.",
+                vec![],
+                0.9,
+            )
         } else {
-            HopInterpretation {
-                severity: Severity::Ok,
-                headline: format!("Healthy ({})", avg),
-                explanation: "This hop is responding normally with acceptable latency and no significant packet loss.".to_string(),
-                probable_causes: vec![],
-                confidence: 0.85,
+            self.message(
+                level,
+                Severity::Ok,
+                &format!("This hop looks normal ({})", avg),
+                "This router is replying normally.",
+                &format!("Healthy ({})", avg),
+                "This hop is responding normally with acceptable latency and no significant packet loss.",
+                vec![],
+                0.85,
+            )
+        }
+    }
+
+    fn message(
+        &self,
+        level: ExplanationLevel,
+        severity: Severity,
+        simple_headline: &str,
+        simple_explanation: &str,
+        detailed_headline: &str,
+        detailed_explanation: &str,
+        probable_causes: Vec<String>,
+        confidence: f64,
+    ) -> HopInterpretation {
+        let (headline, explanation) = match level {
+            ExplanationLevel::Simple => {
+                (simple_headline.to_string(), simple_explanation.to_string())
             }
+            ExplanationLevel::Detailed => (
+                detailed_headline.to_string(),
+                detailed_explanation.to_string(),
+            ),
+        };
+
+        HopInterpretation {
+            severity,
+            headline,
+            explanation,
+            probable_causes,
+            confidence,
         }
     }
 
@@ -454,7 +562,14 @@ impl InterpretationEngine {
 
         // Generate primary finding
         let primary_finding = if !destination_reachable {
-            "Destination unreachable".to_string()
+            if let Some(first_dead_hop) = hops
+                .iter()
+                .find(|h| h.stats.received == 0 && h.stats.sent >= 3)
+            {
+                format!("The route likely breaks near hop {}", first_dead_hop.index)
+            } else {
+                "The target is not replying".to_string()
+            }
         } else if let Some(loss_idx) = loss_start {
             format!("Packet loss begins at hop {}", loss_idx)
         } else if let Some(lat_idx) = latency_start {
@@ -554,6 +669,19 @@ mod tests {
 
         assert_eq!(interpretation.severity, Severity::Warning);
         assert!(interpretation.headline.contains("rate-limiting"));
+    }
+
+    #[test]
+    fn test_simple_no_response_message_for_beginners() {
+        let engine = InterpretationEngine::new();
+        let hop = make_hop(4, 5, 0, None, 100.0);
+        let next_hop = make_hop(5, 5, 5, Some(18.0), 0.0);
+
+        let interpretation =
+            engine.interpret_hop_with_level(&hop, false, &[&next_hop], ExplanationLevel::Simple);
+
+        assert_eq!(interpretation.severity, Severity::Unknown);
+        assert!(interpretation.headline.contains("ignores ping replies"));
     }
 
     #[test]

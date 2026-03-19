@@ -7,9 +7,11 @@ use crate::interpretation::InterpretationEngine;
 use crate::traceroute::TraceRunner;
 use crate::types::*;
 use std::collections::HashMap;
+use std::fs;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::{mpsc, Mutex, RwLock};
 use tracing::{error, info};
 
@@ -19,6 +21,8 @@ pub struct AppState {
     pub sessions: RwLock<HashMap<String, ActiveSession>>,
     /// Interpretation engine
     pub engine: InterpretationEngine,
+    /// Current user settings
+    pub settings: RwLock<Settings>,
 }
 
 /// Active trace session with runner and cancellation flag
@@ -33,6 +37,7 @@ impl Default for AppState {
         Self {
             sessions: RwLock::new(HashMap::new()),
             engine: InterpretationEngine::new(),
+            settings: RwLock::new(Settings::default()),
         }
     }
 }
@@ -144,19 +149,8 @@ async fn run_trace_task(
     let hops = runner_guard.get_hops();
 
     let engine = &state.engine;
-    let hops_with_interpretation: Vec<HopSample> = hops
-        .iter()
-        .enumerate()
-        .map(|(index, hop)| {
-            let is_destination = index == hops.len().saturating_sub(1);
-            let next_hops: Vec<&HopSample> = hops.iter().skip(index + 1).collect();
-            let mut hop = hop.clone();
-            hop.interpretation = Some(engine.interpret_hop(&hop, is_destination, &next_hops));
-            hop.status = hop.interpretation.as_ref().unwrap().severity;
-            hop
-        })
-        .collect();
-
+    let settings = state.settings.read().await.clone();
+    let hops_with_interpretation = engine.annotate_hops(&hops, settings.explanation_level);
     let summary = engine.generate_summary(&hops_with_interpretation);
 
     {
@@ -213,10 +207,18 @@ pub async fn get_session_hops(
     state: State<'_, Arc<AppState>>,
     session_id: String,
 ) -> Result<Vec<HopSample>, String> {
-    let sessions = state.sessions.read().await;
+    let raw_hops = {
+        let sessions = state.sessions.read().await;
+        sessions
+            .get(&session_id)
+            .map(|session| session.hops.lock().unwrap().clone())
+    };
 
-    if let Some(session) = sessions.get(&session_id) {
-        return Ok(session.hops.lock().unwrap().clone());
+    if let Some(hops) = raw_hops {
+        let settings = state.settings.read().await.clone();
+        return Ok(state
+            .engine
+            .annotate_hops(&hops, settings.explanation_level));
     }
 
     Err("Session not found or not running".to_string())
@@ -224,8 +226,15 @@ pub async fn get_session_hops(
 
 /// Generate interpretation for a set of hops
 #[tauri::command]
-pub fn interpret_hops(state: State<'_, Arc<AppState>>, hops: Vec<HopSample>) -> SessionSummary {
-    state.engine.generate_summary(&hops)
+pub async fn interpret_hops(
+    state: State<'_, Arc<AppState>>,
+    hops: Vec<HopSample>,
+) -> SessionSummary {
+    let settings = state.settings.read().await.clone();
+    let interpreted = state
+        .engine
+        .annotate_hops(&hops, settings.explanation_level);
+    state.engine.generate_summary(&interpreted)
 }
 
 /// Export session data as JSON
@@ -499,14 +508,25 @@ pub async fn save_file(
 
 /// Read app settings
 #[tauri::command]
-pub async fn get_settings() -> Settings {
-    Settings::default()
+pub async fn get_settings(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+) -> Result<Settings, String> {
+    let settings = load_settings(&app);
+    *state.settings.write().await = settings.clone();
+    Ok(settings)
 }
 
 /// Update app settings
 #[tauri::command]
-pub async fn update_settings(_settings: Settings) -> Result<(), String> {
-    // TODO: Persist settings to disk
+pub async fn update_settings(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+    settings: Settings,
+) -> Result<(), String> {
+    let settings = sanitize_settings(settings);
+    save_settings(&app, &settings)?;
+    *state.settings.write().await = settings;
     Ok(())
 }
 
@@ -546,4 +566,66 @@ impl Default for Settings {
             default_timeout_ms: 1000,
         }
     }
+}
+
+fn sanitize_settings(settings: Settings) -> Settings {
+    Settings {
+        theme: settings.theme,
+        explanation_level: settings.explanation_level,
+        default_interval_ms: settings.default_interval_ms.clamp(100, 10_000),
+        default_max_hops: settings.default_max_hops.clamp(1, 64),
+        default_timeout_ms: settings.default_timeout_ms.clamp(100, 10_000),
+    }
+}
+
+fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| format!("Failed to resolve settings directory: {}", e))?;
+    Ok(config_dir.join("settings.json"))
+}
+
+fn load_settings(app: &AppHandle) -> Settings {
+    let path = match settings_path(app) {
+        Ok(path) => path,
+        Err(err) => {
+            error!("{}", err);
+            return Settings::default();
+        }
+    };
+
+    let contents = match fs::read_to_string(&path) {
+        Ok(contents) => contents,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Settings::default(),
+        Err(err) => {
+            error!("Failed to read settings from {}: {}", path.display(), err);
+            return Settings::default();
+        }
+    };
+
+    match serde_json::from_str::<Settings>(&contents) {
+        Ok(settings) => sanitize_settings(settings),
+        Err(err) => {
+            error!("Failed to parse settings from {}: {}", path.display(), err);
+            Settings::default()
+        }
+    }
+}
+
+fn save_settings(app: &AppHandle, settings: &Settings) -> Result<(), String> {
+    let path = settings_path(app)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| {
+            format!(
+                "Failed to create settings directory {}: {}",
+                parent.display(),
+                e
+            )
+        })?;
+    }
+
+    let contents = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
+    fs::write(&path, contents)
+        .map_err(|e| format!("Failed to save settings to {}: {}", path.display(), e))
 }

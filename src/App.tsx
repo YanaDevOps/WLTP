@@ -1,19 +1,20 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
-  startTrace,
-  stopTrace,
-  getSessionHops,
-  onTraceEvent,
   exportHtml,
   exportJson,
+  getSessionHops,
   getSettings,
+  interpretHops,
+  onTraceEvent,
+  startTrace,
+  stopTrace,
   updateSettings,
-  type TraceConfig,
-  type TraceSession,
   type HopSample,
   type SessionSummary,
-  type TraceEvent,
   type Settings,
+  type TraceConfig,
+  type TraceEvent,
+  type TraceSession,
 } from './lib/tauri';
 
 type View = 'main' | 'settings';
@@ -34,12 +35,10 @@ function App() {
     defaultTimeoutMs: 1000,
   });
 
-  // Load settings on mount
   useEffect(() => {
     getSettings().then(setSettings).catch(console.error);
   }, []);
 
-  // Subscribe to trace events
   useEffect(() => {
     let unlisten: (() => void) | undefined;
 
@@ -55,29 +54,17 @@ function App() {
 
         case 'hop_discovered':
           if (event.hop) {
-            setHops((prev) => {
-              const existing = prev.findIndex((h) => h.index === event.hop!.index);
-              if (existing >= 0) {
-                const updated = [...prev];
-                updated[existing] = event.hop!;
-                return updated;
-              }
-              return [...prev, event.hop!].sort((a, b) => a.index - b.index);
-            });
+            setHops((prev) => upsertHop(prev, event.hop));
           }
           break;
 
         case 'hop_stats_update':
           if (event.hopIndex !== undefined && event.stats) {
-            setHops((prev) => {
-              const idx = prev.findIndex((h) => h.index === event.hopIndex);
-              if (idx >= 0) {
-                const updated = [...prev];
-                updated[idx] = { ...updated[idx], stats: event.stats! };
-                return updated;
-              }
-              return prev;
-            });
+            setHops((prev) =>
+              prev.map((hop) =>
+                hop.index === event.hopIndex ? { ...hop, stats: event.stats! } : hop,
+              ),
+            );
           }
           break;
 
@@ -103,7 +90,9 @@ function App() {
     });
 
     return () => {
-      if (unlisten) unlisten();
+      if (unlisten) {
+        unlisten();
+      }
     };
   }, []);
 
@@ -117,8 +106,19 @@ function App() {
     const pollHops = async () => {
       try {
         const currentHops = await getSessionHops(session.id);
-        if (!disposed) {
-          setHops(currentHops);
+        if (disposed) {
+          return;
+        }
+
+        setHops(currentHops);
+
+        if (currentHops.length > 0) {
+          const currentSummary = await interpretHops(currentHops);
+          if (!disposed) {
+            setSummary(currentSummary);
+          }
+        } else {
+          setSummary(null);
         }
       } catch {
         if (!disposed) {
@@ -152,7 +152,7 @@ function App() {
       intervalMs: settings.defaultIntervalMs,
       maxHops: settings.defaultMaxHops,
       timeoutMs: settings.defaultTimeoutMs,
-      count: 0, // Continuous until stopped
+      count: 0,
     };
 
     try {
@@ -163,29 +163,34 @@ function App() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [target, settings]);
+  }, [settings, target]);
 
   const handleStopTrace = useCallback(async () => {
-    if (session) {
-      try {
-        await stopTrace(session.id);
-        setIsRunning(false);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-      }
+    if (!session) {
+      return;
+    }
+
+    try {
+      await stopTrace(session.id);
+      setIsRunning(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     }
   }, [session]);
 
   const handleExportHtml = useCallback(async () => {
-    if (!session || !summary) return;
+    if (!session || !summary) {
+      return;
+    }
+
     try {
       const html = await exportHtml(summary, hops, session.config);
       const blob = new Blob([html], { type: 'text/html' });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `wltp-report-${target}-${new Date().toISOString().slice(0, 10)}.html`;
-      a.click();
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `wltp-report-${target}-${new Date().toISOString().slice(0, 10)}.html`;
+      anchor.click();
       URL.revokeObjectURL(url);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -193,15 +198,18 @@ function App() {
   }, [hops, session, summary, target]);
 
   const handleExportJson = useCallback(async () => {
-    if (!session || !summary) return;
+    if (!session || !summary) {
+      return;
+    }
+
     try {
       const json = await exportJson(summary, hops, session.config);
       const blob = new Blob([json], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `wltp-report-${target}-${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `wltp-report-${target}-${new Date().toISOString().slice(0, 10)}.json`;
+      anchor.click();
       URL.revokeObjectURL(url);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -217,89 +225,97 @@ function App() {
     }
   }, []);
 
-  // Apply theme
   useEffect(() => {
     const root = document.documentElement;
     if (settings.theme === 'dark') {
       root.classList.add('dark');
-    } else if (settings.theme === 'light') {
-      root.classList.remove('dark');
-    } else {
-      // System preference
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      if (prefersDark) {
-        root.classList.add('dark');
-      } else {
-        root.classList.remove('dark');
-      }
+      return;
     }
+
+    if (settings.theme === 'light') {
+      root.classList.remove('dark');
+      return;
+    }
+
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    root.classList.toggle('dark', prefersDark);
   }, [settings.theme]);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+    <div className="flex h-screen overflow-hidden bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+      <div className="mx-auto flex h-full w-full max-w-[1600px] flex-col">
+        <header className="shrink-0 border-b border-slate-200 bg-white/95 dark:border-slate-800 dark:bg-slate-900/95">
+          <div className="flex h-12 items-center justify-between px-3 sm:px-4">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">W</span>
+              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-blue-600">
+                <span className="text-xs font-bold text-white">W</span>
               </div>
-              <h1 className="text-xl font-semibold">WLTP</h1>
+              <div>
+                <h1 className="text-sm font-semibold tracking-wide">WLTP</h1>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  WinMTR-style route diagnostics
+                </p>
+              </div>
             </div>
 
-            <nav className="flex items-center gap-4">
-              <button
-                onClick={() => setView('main')}
-                className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                  view === 'main'
-                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
-              >
+            <nav className="flex items-center gap-2">
+              <NavButton active={view === 'main'} onClick={() => setView('main')}>
                 Diagnose
-              </button>
-              <button
-                onClick={() => setView('settings')}
-                className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                  view === 'settings'
-                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
-              >
+              </NavButton>
+              <NavButton active={view === 'settings'} onClick={() => setView('settings')}>
                 Settings
-              </button>
+              </NavButton>
             </nav>
           </div>
-        </div>
-      </header>
+        </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {view === 'main' ? (
-          <MainView
-            target={target}
-            setTarget={setTarget}
-            isRunning={isRunning}
-            error={error}
-            hops={hops}
-            summary={summary}
-            onStart={handleStartTrace}
-            onStop={handleStopTrace}
-            onExportHtml={handleExportHtml}
-            onExportJson={handleExportJson}
-            session={session}
-          />
-        ) : (
-          <SettingsView
-            settings={settings}
-            onChange={handleSettingsChange}
-          />
-        )}
-      </main>
+        <main className="flex min-h-0 flex-1 flex-col p-3 sm:p-4">
+          {view === 'main' ? (
+            <MainView
+              target={target}
+              setTarget={setTarget}
+              isRunning={isRunning}
+              error={error}
+              hops={hops}
+              summary={summary}
+              onStart={handleStartTrace}
+              onStop={handleStopTrace}
+              onExportHtml={handleExportHtml}
+              onExportJson={handleExportJson}
+              session={session}
+            />
+          ) : (
+            <SettingsView settings={settings} onChange={handleSettingsChange} />
+          )}
+        </main>
+      </div>
     </div>
   );
 }
 
-// Main diagnostic view
+function NavButton({
+  active,
+  children,
+  onClick,
+}: {
+  active: boolean;
+  children: ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+        active
+          ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+          : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
 interface MainViewProps {
   target: string;
   setTarget: (value: string) => void;
@@ -328,177 +344,220 @@ function MainView({
   session,
 }: MainViewProps) {
   return (
-    <div className="space-y-6">
-      {/* Input Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="flex-1">
-            <label htmlFor="target" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Target Host or IP
-            </label>
-            <input
-              type="text"
-              id="target"
-              value={target}
-              onChange={(e) => setTarget(e.target.value)}
-              placeholder="e.g., google.com or 8.8.8.8"
-              disabled={isRunning}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white disabled:opacity-50"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !isRunning) {
-                  onStart();
-                }
-              }}
-            />
+    <div className="flex h-full min-h-0 flex-col gap-3">
+      <section className="shrink-0 rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex flex-col gap-3 p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+            <div className="flex-1">
+              <label
+                htmlFor="target"
+                className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+              >
+                Target Host or IP
+              </label>
+              <input
+                id="target"
+                type="text"
+                value={target}
+                onChange={(e) => setTarget(e.target.value)}
+                placeholder="e.g., google.com or 8.8.8.8"
+                disabled={isRunning}
+                className="w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !isRunning) {
+                    onStart();
+                  }
+                }}
+              />
+            </div>
+
+            <div className="flex items-end gap-2">
+              {!isRunning ? (
+                <button
+                  onClick={onStart}
+                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+                >
+                  Start Trace
+                </button>
+              ) : (
+                <button
+                  onClick={onStop}
+                  className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700"
+                >
+                  Stop
+                </button>
+              )}
+            </div>
           </div>
 
-          <div className="flex items-end gap-2">
-            {!isRunning ? (
-              <button
-                onClick={onStart}
-                className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
-              >
-                Start Trace
-              </button>
-            ) : (
-              <button
-                onClick={onStop}
-                className="px-6 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors font-medium"
-              >
-                Stop
-              </button>
-            )}
-          </div>
+          {error && (
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 dark:border-red-900 dark:bg-red-950/40">
+              <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+            </div>
+          )}
+
+          {session && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600 dark:text-slate-400">
+              {session.targetIp && (
+                <span>
+                  Resolved:{' '}
+                  <code className="rounded bg-slate-100 px-1.5 py-0.5 dark:bg-slate-800">
+                    {session.targetIp}
+                  </code>
+                </span>
+              )}
+              {session.startedAt && (
+                <span>Started: {new Date(session.startedAt).toLocaleTimeString()}</span>
+              )}
+            </div>
+          )}
         </div>
+      </section>
 
-        {error && (
-          <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
-            <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-          </div>
-        )}
+      {summary && <SummaryCard summary={summary} />}
 
-        {session && (
-          <div className="mt-4 flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-            {session.targetIp && (
-              <span>Resolved: <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">{session.targetIp}</code></span>
-            )}
-            {session.startedAt && (
-              <span>Started: {new Date(session.startedAt).toLocaleTimeString()}</span>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Summary Section */}
-      {summary && (
-        <SummaryCard summary={summary} />
-      )}
-
-      {/* Hops Table */}
       {hops.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-          <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Network Route</h2>
+        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4 py-2.5 dark:border-slate-800">
+            <div>
+              <h2 className="text-sm font-semibold">Network Route</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Scroll stays inside the hops panel.
+              </p>
+            </div>
+
             <div className="flex gap-2">
               <button
                 onClick={onExportHtml}
-                className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
+                className="rounded-md bg-slate-100 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700"
               >
                 Export HTML
               </button>
               <button
                 onClick={onExportJson}
-                className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
+                className="rounded-md bg-slate-100 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700"
               >
                 Export JSON
               </button>
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-900">
+          <div className="min-h-0 flex-1 overflow-auto">
+            <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
+              <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-950">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Hop</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Host</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Loss%</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Sent</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Recv</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Best</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Avg</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Worst</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Last</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Jitter</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Interpretation</th>
+                  <HeaderCell>Status</HeaderCell>
+                  <HeaderCell>Hop</HeaderCell>
+                  <HeaderCell>Host</HeaderCell>
+                  <HeaderCell align="right">Loss%</HeaderCell>
+                  <HeaderCell align="right">Sent</HeaderCell>
+                  <HeaderCell align="right">Recv</HeaderCell>
+                  <HeaderCell align="right">Best</HeaderCell>
+                  <HeaderCell align="right">Avg</HeaderCell>
+                  <HeaderCell align="right">Worst</HeaderCell>
+                  <HeaderCell align="right">Last</HeaderCell>
+                  <HeaderCell align="right">Jitter</HeaderCell>
+                  <HeaderCell>Interpretation</HeaderCell>
                 </tr>
               </thead>
-              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+
+              <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-800 dark:bg-slate-900">
                 {hops.map((hop) => (
                   <HopRow key={hop.index} hop={hop} />
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
+        </section>
       )}
 
       {isRunning && hops.length === 0 && !error && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold mb-2">Trace is running</h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
+        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <h2 className="mb-1 text-sm font-semibold">Trace is running</h2>
+          <p className="text-sm text-slate-600 dark:text-slate-400">
             Discovering route and waiting for the first hop responses.
           </p>
-        </div>
+        </section>
       )}
 
-      {/* Empty State */}
       {!isRunning && hops.length === 0 && !error && (
-        <div className="text-center py-12">
-          <div className="text-gray-400 dark:text-gray-600 mb-4">
-            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
+        <section className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white/60 p-8 text-center dark:border-slate-700 dark:bg-slate-900/40">
+          <div>
+            <div className="mb-4 text-slate-400 dark:text-slate-600">
+              <svg className="mx-auto h-16 w-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                />
+              </svg>
+            </div>
+            <h3 className="mb-2 text-base font-semibold text-slate-900 dark:text-slate-100">
+              Ready to Diagnose
+            </h3>
+            <p className="mx-auto max-w-md text-sm text-slate-600 dark:text-slate-400">
+              Enter a hostname or IP address above and click Start Trace to begin network diagnostics.
+            </p>
           </div>
-          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Ready to Diagnose</h3>
-          <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto">
-            Enter a hostname or IP address above and click "Start Trace" to begin network diagnostics.
-          </p>
-        </div>
+        </section>
       )}
     </div>
   );
 }
 
-// Summary card component
+function HeaderCell({
+  children,
+  align = 'left',
+}: {
+  children: ReactNode;
+  align?: 'left' | 'right';
+}) {
+  return (
+    <th
+      className={`px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 ${
+        align === 'right' ? 'text-right' : 'text-left'
+      }`}
+    >
+      {children}
+    </th>
+  );
+}
+
 function SummaryCard({ summary }: { summary: SessionSummary }) {
-  const statusColors = {
-    ok: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800',
-    warning: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800',
-    critical: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 border-red-200 dark:border-red-800',
-    unknown: 'bg-gray-100 dark:bg-gray-900/30 text-gray-800 dark:text-gray-300 border-gray-200 dark:border-gray-800',
+  const statusColors: Record<string, string> = {
+    ok: 'border-green-200 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950/40 dark:text-green-300',
+    warning:
+      'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300',
+    critical: 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300',
+    unknown: 'border-slate-200 bg-slate-100 text-slate-800 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300',
   };
 
-  const statusIcon = {
-    ok: '✓',
-    warning: '⚠',
-    critical: '✗',
+  const statusIcon: Record<string, string> = {
+    ok: 'OK',
+    warning: '!',
+    critical: 'X',
     unknown: '?',
   };
 
   return (
-    <div className={`rounded-lg border p-6 ${statusColors[summary.overallStatus]}`}>
-      <div className="flex items-start gap-4">
-        <div className="text-2xl">{statusIcon[summary.overallStatus]}</div>
+    <section className={`shrink-0 rounded-lg border p-4 ${statusColors[summary.overallStatus]}`}>
+      <div className="flex items-start gap-3">
+        <div className="flex h-7 min-w-7 items-center justify-center rounded-md border border-current/20 bg-white/50 text-xs font-bold dark:bg-transparent">
+          {statusIcon[summary.overallStatus]}
+        </div>
+
         <div className="flex-1">
-          <h2 className="text-lg font-semibold mb-2">{summary.primaryFinding}</h2>
+          <h2 className="mb-2 text-sm font-semibold">{summary.primaryFinding}</h2>
 
           {summary.secondaryFindings.length > 0 && (
-            <div className="mb-4">
-              <h3 className="text-sm font-medium mb-1 opacity-80">Observations:</h3>
-              <ul className="list-disc list-inside text-sm space-y-1">
-                {summary.secondaryFindings.map((finding, i) => (
-                  <li key={i}>{finding}</li>
+            <div className="mb-3">
+              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide opacity-80">
+                Observations
+              </h3>
+              <ul className="list-disc list-inside space-y-1 text-sm">
+                {summary.secondaryFindings.map((finding, index) => (
+                  <li key={index}>{finding}</li>
                 ))}
               </ul>
             </div>
@@ -506,86 +565,97 @@ function SummaryCard({ summary }: { summary: SessionSummary }) {
 
           {summary.recommendedNextSteps.length > 0 && (
             <div>
-              <h3 className="text-sm font-medium mb-1 opacity-80">Recommended Actions:</h3>
-              <ul className="list-disc list-inside text-sm space-y-1">
-                {summary.recommendedNextSteps.map((step, i) => (
-                  <li key={i}>{step}</li>
+              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide opacity-80">
+                Recommended Actions
+              </h3>
+              <ul className="list-disc list-inside space-y-1 text-sm">
+                {summary.recommendedNextSteps.map((step, index) => (
+                  <li key={index}>{step}</li>
                 ))}
               </ul>
             </div>
           )}
         </div>
       </div>
-    </div>
+    </section>
   );
 }
 
-// Hop row component
 function HopRow({ hop }: { hop: HopSample }) {
-  const statusColors = {
-    ok: 'text-green-500',
-    warning: 'text-yellow-500',
-    critical: 'text-red-500',
-    unknown: 'text-gray-400',
+  const statusColors: Record<string, string> = {
+    ok: 'bg-green-500',
+    warning: 'bg-amber-500',
+    critical: 'bg-red-500',
+    unknown: 'bg-slate-400',
   };
 
   const formatMs = (value: number | null | undefined): string => {
-    if (value === null || value === undefined) return '-';
-    return `${value.toFixed(1)}`;
+    if (value === null || value === undefined) {
+      return '-';
+    }
+    return value.toFixed(1);
   };
 
   const hostDisplay = hop.hostname || hop.ip || '*';
   const ipDisplay = hop.ip && hop.hostname ? hop.ip : '';
 
   return (
-    <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-      <td className="px-4 py-3 whitespace-nowrap">
-        <span className={`text-lg ${statusColors[hop.status]}`}>●</span>
+    <tr className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/70">
+      <td className="whitespace-nowrap px-3 py-2.5">
+        <span className={`inline-block h-2.5 w-2.5 rounded-full ${statusColors[hop.status]}`} />
       </td>
-      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+      <td className="whitespace-nowrap px-3 py-2.5 text-sm font-semibold text-slate-900 dark:text-slate-100">
         {hop.index}
       </td>
-      <td className="px-4 py-3 whitespace-nowrap">
-        <div className="text-sm">
-          <div className="font-medium text-gray-900 dark:text-gray-100">{hostDisplay}</div>
-          {ipDisplay && <div className="text-gray-500 dark:text-gray-400 text-xs">{ipDisplay}</div>}
+      <td className="px-3 py-2.5">
+        <div className="min-w-[220px] text-sm">
+          <div className="truncate font-medium text-slate-900 dark:text-slate-100">
+            {hostDisplay}
+          </div>
+          {ipDisplay && (
+            <div className="truncate text-[11px] text-slate-500 dark:text-slate-400">
+              {ipDisplay}
+            </div>
+          )}
         </div>
       </td>
-      <td className="px-4 py-3 whitespace-nowrap text-sm text-right tabular-nums">
-        <span className={hop.stats.lossPercent > 5 ? 'text-red-600 dark:text-red-400 font-medium' : ''}>
+      <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums">
+        <span className={hop.stats.lossPercent > 5 ? 'font-semibold text-red-600 dark:text-red-400' : ''}>
           {hop.stats.lossPercent.toFixed(1)}%
         </span>
       </td>
-      <td className="px-4 py-3 whitespace-nowrap text-sm text-right tabular-nums text-gray-600 dark:text-gray-400">
+      <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums text-slate-600 dark:text-slate-400">
         {hop.stats.sent}
       </td>
-      <td className="px-4 py-3 whitespace-nowrap text-sm text-right tabular-nums text-gray-600 dark:text-gray-400">
+      <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums text-slate-600 dark:text-slate-400">
         {hop.stats.received}
       </td>
-      <td className="px-4 py-3 whitespace-nowrap text-sm text-right tabular-nums text-gray-600 dark:text-gray-400">
+      <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums text-slate-600 dark:text-slate-400">
         {formatMs(hop.stats.bestMs)}
       </td>
-      <td className="px-4 py-3 whitespace-nowrap text-sm text-right tabular-nums">
-        <span className={hop.stats.avgMs && hop.stats.avgMs > 100 ? 'text-yellow-600 dark:text-yellow-400' : ''}>
+      <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums">
+        <span className={hop.stats.avgMs && hop.stats.avgMs > 100 ? 'text-amber-600 dark:text-amber-400' : ''}>
           {formatMs(hop.stats.avgMs)}
         </span>
       </td>
-      <td className="px-4 py-3 whitespace-nowrap text-sm text-right tabular-nums text-gray-600 dark:text-gray-400">
+      <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums text-slate-600 dark:text-slate-400">
         {formatMs(hop.stats.worstMs)}
       </td>
-      <td className="px-4 py-3 whitespace-nowrap text-sm text-right tabular-nums text-gray-600 dark:text-gray-400">
+      <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums text-slate-600 dark:text-slate-400">
         {formatMs(hop.stats.lastMs)}
       </td>
-      <td className="px-4 py-3 whitespace-nowrap text-sm text-right tabular-nums">
-        <span className={hop.stats.jitterMs && hop.stats.jitterMs > 30 ? 'text-yellow-600 dark:text-yellow-400' : ''}>
+      <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums">
+        <span className={hop.stats.jitterMs && hop.stats.jitterMs > 30 ? 'text-amber-600 dark:text-amber-400' : ''}>
           {formatMs(hop.stats.jitterMs)}
         </span>
       </td>
-      <td className="px-4 py-3 text-sm max-w-xs">
+      <td className="max-w-sm px-3 py-2.5 text-sm">
         {hop.interpretation && (
-          <div>
-            <div className="font-medium text-gray-900 dark:text-gray-100">{hop.interpretation.headline}</div>
-            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">
+          <div className="space-y-0.5">
+            <div className="font-medium text-slate-900 dark:text-slate-100">
+              {hop.interpretation.headline}
+            </div>
+            <div className="line-clamp-2 text-xs text-slate-500 dark:text-slate-400">
               {hop.interpretation.explanation}
             </div>
           </div>
@@ -595,7 +665,6 @@ function HopRow({ hop }: { hop: HopSample }) {
   );
 }
 
-// Settings view
 function SettingsView({
   settings,
   onChange,
@@ -604,99 +673,124 @@ function SettingsView({
   onChange: (settings: Settings) => void;
 }) {
   return (
-    <div className="max-w-2xl mx-auto">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-        <h2 className="text-lg font-semibold mb-6">Settings</h2>
+    <div className="mx-auto h-full w-full max-w-3xl overflow-auto">
+      <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <h2 className="mb-5 text-base font-semibold">Settings</h2>
 
-        <div className="space-y-6">
-          {/* Theme */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Theme
-            </label>
+        <div className="space-y-5">
+          <Field label="Theme">
             <select
               value={settings.theme}
               onChange={(e) => onChange({ ...settings, theme: e.target.value as Settings['theme'] })}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+              className={inputClassName}
             >
               <option value="system">System</option>
               <option value="light">Light</option>
               <option value="dark">Dark</option>
             </select>
-          </div>
+          </Field>
 
-          {/* Explanation Level */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Explanation Level
-            </label>
+          <Field label="Explanation Level">
             <select
               value={settings.explanationLevel}
-              onChange={(e) => onChange({ ...settings, explanationLevel: e.target.value as Settings['explanationLevel'] })}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+              onChange={(e) =>
+                onChange({
+                  ...settings,
+                  explanationLevel: e.target.value as Settings['explanationLevel'],
+                })
+              }
+              className={inputClassName}
             >
               <option value="simple">Simple (for beginners)</option>
               <option value="detailed">Detailed (for advanced users)</option>
             </select>
-          </div>
+          </Field>
 
-          {/* Default Interval */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Probe Interval (ms)
-            </label>
+          <Field label="Probe Interval (ms)" hint="Time between probes (100-10000 ms)">
             <input
               type="number"
-              value={settings.defaultIntervalMs}
-              onChange={(e) => onChange({ ...settings, defaultIntervalMs: parseInt(e.target.value) || 1000 })}
               min={100}
               max={10000}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+              value={settings.defaultIntervalMs}
+              onChange={(e) =>
+                onChange({
+                  ...settings,
+                  defaultIntervalMs: parseInt(e.target.value, 10) || 1000,
+                })
+              }
+              className={inputClassName}
             />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Time between probes (100-10000 ms)
-            </p>
-          </div>
+          </Field>
 
-          {/* Max Hops */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Maximum Hops
-            </label>
+          <Field label="Maximum Hops" hint="Maximum number of hops to trace (1-64)">
             <input
               type="number"
-              value={settings.defaultMaxHops}
-              onChange={(e) => onChange({ ...settings, defaultMaxHops: parseInt(e.target.value) || 30 })}
               min={1}
               max={64}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+              value={settings.defaultMaxHops}
+              onChange={(e) =>
+                onChange({
+                  ...settings,
+                  defaultMaxHops: parseInt(e.target.value, 10) || 30,
+                })
+              }
+              className={inputClassName}
             />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Maximum number of hops to trace (1-64)
-            </p>
-          </div>
+          </Field>
 
-          {/* Timeout */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Probe Timeout (ms)
-            </label>
+          <Field label="Probe Timeout (ms)" hint="Timeout for each probe (100-10000 ms)">
             <input
               type="number"
-              value={settings.defaultTimeoutMs}
-              onChange={(e) => onChange({ ...settings, defaultTimeoutMs: parseInt(e.target.value) || 1000 })}
               min={100}
               max={10000}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+              value={settings.defaultTimeoutMs}
+              onChange={(e) =>
+                onChange({
+                  ...settings,
+                  defaultTimeoutMs: parseInt(e.target.value, 10) || 1000,
+                })
+              }
+              className={inputClassName}
             />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Timeout for each probe (100-10000 ms)
-            </p>
-          </div>
+          </Field>
         </div>
       </div>
     </div>
   );
 }
+
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div>
+      <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+        {label}
+      </label>
+      {children}
+      {hint && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{hint}</p>}
+    </div>
+  );
+}
+
+function upsertHop(current: HopSample[], nextHop: HopSample): HopSample[] {
+  const existingIndex = current.findIndex((hop) => hop.index === nextHop.index);
+  if (existingIndex === -1) {
+    return [...current, nextHop].sort((left, right) => left.index - right.index);
+  }
+
+  const updated = [...current];
+  updated[existingIndex] = nextHop;
+  return updated;
+}
+
+const inputClassName =
+  'w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white';
 
 export default App;
