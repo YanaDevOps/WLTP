@@ -391,8 +391,8 @@ function MainView({
           </div>
 
           {error && (
-            <div className="rounded-md border border-rose-200 bg-rose-50/90 px-2 py-1 dark:border-rose-900 dark:bg-rose-950/40">
-              <p className="text-[12px] text-rose-700 dark:text-rose-300">{error}</p>
+            <div className="rounded-md border border-rose-300 bg-rose-100/90 px-2 py-1 dark:border-rose-950 dark:bg-rose-950/20">
+              <p className="text-[12px] text-rose-800 dark:text-rose-200">{error}</p>
             </div>
           )}
 
@@ -550,10 +550,10 @@ function HeaderCell({
 
 function SummaryCard({ summary }: { summary: SessionSummary }) {
   const statusColors: Record<string, string> = {
-    ok: 'border-emerald-200 bg-emerald-50/90 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300',
+    ok: 'border-emerald-300 bg-emerald-100/90 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/35 dark:text-emerald-300',
     warning:
       'border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300',
-    critical: 'border-rose-200 bg-gradient-to-r from-rose-50 to-orange-50 text-rose-900 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300',
+    critical: 'border-rose-300 bg-gradient-to-r from-rose-100 to-orange-100 text-rose-950 dark:border-rose-950 dark:bg-rose-950/20 dark:text-rose-200',
     unknown: 'border-orange-200 bg-orange-50/80 text-stone-800 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300',
   };
 
