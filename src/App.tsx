@@ -242,17 +242,17 @@ function App() {
   }, [settings.theme]);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+    <div className="flex h-screen overflow-hidden bg-[radial-gradient(circle_at_top,#fde7d7_0%,#f6d4c5_28%,#efe5dd_58%,#e8ddd5_100%)] text-stone-900 dark:bg-[radial-gradient(circle_at_top,#4b2a2a_0%,#2b1d24_35%,#171318_72%,#0f0d12_100%)] dark:text-stone-100">
       <div className="mx-auto flex h-full w-full max-w-[1600px] flex-col">
-        <header className="shrink-0 border-b border-slate-200 bg-white/95 dark:border-slate-800 dark:bg-slate-900/95">
-          <div className="flex h-12 items-center justify-between px-3 sm:px-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-blue-600">
+        <header className="shrink-0 border-b border-orange-200/70 bg-white/75 backdrop-blur-md dark:border-orange-950/70 dark:bg-stone-950/60">
+          <div className="flex h-11 items-center justify-between px-2.5 sm:px-3.5">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-amber-500 via-orange-500 to-rose-500 shadow-sm shadow-orange-500/30">
                 <span className="text-xs font-bold text-white">W</span>
               </div>
               <div>
-                <h1 className="text-sm font-semibold tracking-wide">WLTP</h1>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                <h1 className="text-sm font-semibold tracking-[0.14em]">WLTP</h1>
+                <p className="text-[10px] text-stone-500 dark:text-stone-400">
                   WinMTR-style route diagnostics
                 </p>
               </div>
@@ -269,7 +269,7 @@ function App() {
           </div>
         </header>
 
-        <main className="flex min-h-0 flex-1 flex-col p-3 sm:p-4">
+        <main className="flex min-h-0 flex-1 flex-col p-2.5 sm:p-3">
           {view === 'main' ? (
             <MainView
               target={target}
@@ -305,10 +305,10 @@ function NavButton({
   return (
     <button
       onClick={onClick}
-      className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+      className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${
         active
-          ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
-          : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100'
+          ? 'bg-gradient-to-r from-amber-100 via-orange-100 to-rose-100 text-orange-900 shadow-sm dark:from-amber-950 dark:via-orange-950 dark:to-rose-950 dark:text-orange-200'
+          : 'text-stone-600 hover:bg-white/60 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-900/50 dark:hover:text-stone-100'
       }`}
     >
       {children}
@@ -344,14 +344,14 @@ function MainView({
   session,
 }: MainViewProps) {
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3">
-      <section className="shrink-0 rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex flex-col gap-3 p-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+    <div className="flex h-full min-h-0 flex-col gap-2.5">
+      <section className="shrink-0 rounded-md border border-orange-200/70 bg-white/82 shadow-sm shadow-orange-200/30 backdrop-blur-sm dark:border-orange-950/70 dark:bg-stone-950/72 dark:shadow-black/20">
+        <div className="flex flex-col gap-2.5 p-3">
+          <div className="flex flex-col gap-2.5 lg:flex-row lg:items-end">
             <div className="flex-1">
               <label
                 htmlFor="target"
-                className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+                className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500 dark:text-stone-400"
               >
                 Target Host or IP
               </label>
@@ -362,7 +362,7 @@ function MainView({
                 onChange={(e) => setTarget(e.target.value)}
                 placeholder="e.g., google.com or 8.8.8.8"
                 disabled={isRunning}
-                className="w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                className="w-full rounded-md border border-orange-200 bg-orange-50/70 px-3 py-1.5 text-[13px] shadow-sm outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 disabled:opacity-50 dark:border-stone-700 dark:bg-stone-900 dark:text-white"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !isRunning) {
                     onStart();
@@ -375,14 +375,14 @@ function MainView({
               {!isRunning ? (
                 <button
                   onClick={onStart}
-                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+                className="rounded-md bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 px-3.5 py-1.5 text-[13px] font-semibold text-white shadow-sm shadow-orange-500/25 transition hover:from-amber-600 hover:via-orange-600 hover:to-rose-600"
                 >
                   Start Trace
                 </button>
               ) : (
                 <button
                   onClick={onStop}
-                  className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700"
+                className="rounded-md bg-gradient-to-r from-rose-500 to-red-500 px-3.5 py-1.5 text-[13px] font-semibold text-white shadow-sm shadow-rose-500/25 transition hover:from-rose-600 hover:to-red-600"
                 >
                   Stop
                 </button>
@@ -391,17 +391,17 @@ function MainView({
           </div>
 
           {error && (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 dark:border-red-900 dark:bg-red-950/40">
-              <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+            <div className="rounded-md border border-rose-200 bg-rose-50/90 px-3 py-2 dark:border-rose-900 dark:bg-rose-950/40">
+              <p className="text-sm text-rose-700 dark:text-rose-300">{error}</p>
             </div>
           )}
 
           {session && (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600 dark:text-slate-400">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-stone-600 dark:text-stone-400">
               {session.targetIp && (
                 <span>
                   Resolved:{' '}
-                  <code className="rounded bg-slate-100 px-1.5 py-0.5 dark:bg-slate-800">
+                  <code className="rounded bg-orange-100/80 px-1.5 py-0.5 dark:bg-stone-800">
                     {session.targetIp}
                   </code>
                 </span>
@@ -417,15 +417,15 @@ function MainView({
       {!isRunning && summary && <SummaryCard summary={summary} />}
 
       {isRunning && (
-        <section className="shrink-0 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-blue-900 shadow-sm dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
+        <section className="shrink-0 rounded-md border border-orange-200/80 bg-gradient-to-r from-amber-50 via-orange-50 to-rose-50 px-3 py-2.5 text-orange-950 shadow-sm shadow-orange-200/30 dark:border-orange-950/80 dark:bg-gradient-to-r dark:from-amber-950/30 dark:via-orange-950/25 dark:to-rose-950/30 dark:text-orange-200">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold">Trace in progress</h2>
-              <p className="text-xs opacity-80">
+              <h2 className="text-[13px] font-semibold">Trace in progress</h2>
+              <p className="text-[11px] opacity-80">
                 Final diagnosis appears after the route settles or when you stop the trace.
               </p>
             </div>
-            <div className="text-xs font-medium opacity-80">
+            <div className="text-[11px] font-medium opacity-80">
               {hops.length > 0 ? `${hops.length} hops discovered` : 'Discovering hops'}
             </div>
           </div>
@@ -433,11 +433,11 @@ function MainView({
       )}
 
       {hops.length > 0 && (
-        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4 py-2.5 dark:border-slate-800">
+        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-orange-200/70 bg-white/82 shadow-sm shadow-orange-200/25 backdrop-blur-sm dark:border-orange-950/70 dark:bg-stone-950/72">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-orange-200/70 px-3 py-2 dark:border-orange-950/70">
             <div>
-              <h2 className="text-sm font-semibold">Network Route</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <h2 className="text-[13px] font-semibold">Network Route</h2>
+              <p className="text-[11px] text-stone-500 dark:text-stone-400">
                 Scroll stays inside the hops panel.
               </p>
             </div>
@@ -445,13 +445,13 @@ function MainView({
             <div className="flex gap-2">
               <button
                 onClick={onExportHtml}
-                className="rounded-md bg-slate-100 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700"
+                className="rounded-md bg-orange-100/80 px-2.5 py-1 text-[11px] font-semibold text-orange-900 transition hover:bg-orange-200 dark:bg-stone-800 dark:text-orange-200 dark:hover:bg-stone-700"
               >
                 Export HTML
               </button>
               <button
                 onClick={onExportJson}
-                className="rounded-md bg-slate-100 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700"
+                className="rounded-md bg-orange-100/80 px-2.5 py-1 text-[11px] font-semibold text-orange-900 transition hover:bg-orange-200 dark:bg-stone-800 dark:text-orange-200 dark:hover:bg-stone-700"
               >
                 Export JSON
               </button>
@@ -459,8 +459,8 @@ function MainView({
           </div>
 
           <div className="min-h-0 flex-1 overflow-auto">
-            <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
-              <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-950">
+            <table className="min-w-full divide-y divide-orange-100 dark:divide-stone-800">
+              <thead className="sticky top-0 z-10 bg-gradient-to-r from-orange-50 to-rose-50 dark:from-stone-950 dark:to-stone-900">
                 <tr>
                   <HeaderCell>Status</HeaderCell>
                   <HeaderCell>Hop</HeaderCell>
@@ -477,7 +477,7 @@ function MainView({
                 </tr>
               </thead>
 
-              <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-800 dark:bg-slate-900">
+              <tbody className="divide-y divide-orange-100 bg-white/90 dark:divide-stone-800 dark:bg-stone-950/80">
                 {hops.map((hop) => (
                   <HopRow key={hop.index} hop={hop} />
                 ))}
@@ -488,19 +488,19 @@ function MainView({
       )}
 
       {isRunning && hops.length === 0 && !error && (
-        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <h2 className="mb-1 text-sm font-semibold">Trace is running</h2>
-          <p className="text-sm text-slate-600 dark:text-slate-400">
+        <section className="rounded-md border border-orange-200/70 bg-white/82 p-3 shadow-sm shadow-orange-200/20 dark:border-orange-950/70 dark:bg-stone-950/72">
+          <h2 className="mb-1 text-[13px] font-semibold">Trace is running</h2>
+          <p className="text-sm text-stone-600 dark:text-stone-400">
             Discovering route and waiting for the first hop responses.
           </p>
         </section>
       )}
 
       {!isRunning && hops.length === 0 && !error && (
-        <section className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white/60 p-8 text-center dark:border-slate-700 dark:bg-slate-900/40">
+        <section className="flex flex-1 items-center justify-center rounded-md border border-dashed border-orange-300/80 bg-white/60 p-6 text-center shadow-inner shadow-orange-100/30 dark:border-orange-900/70 dark:bg-stone-950/45">
           <div>
-            <div className="mb-4 text-slate-400 dark:text-slate-600">
-              <svg className="mx-auto h-16 w-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="mb-3 text-orange-300 dark:text-stone-600">
+              <svg className="mx-auto h-14 w-14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -509,10 +509,10 @@ function MainView({
                 />
               </svg>
             </div>
-            <h3 className="mb-2 text-base font-semibold text-slate-900 dark:text-slate-100">
+            <h3 className="mb-2 text-sm font-semibold text-stone-900 dark:text-stone-100">
               Ready to Diagnose
             </h3>
-            <p className="mx-auto max-w-md text-sm text-slate-600 dark:text-slate-400">
+            <p className="mx-auto max-w-md text-sm text-stone-600 dark:text-stone-400">
               Enter a hostname or IP address above and click Start Trace to begin network diagnostics.
             </p>
           </div>
@@ -531,7 +531,7 @@ function HeaderCell({
 }) {
   return (
     <th
-      className={`px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 ${
+      className={`px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-500 dark:text-stone-400 ${
         align === 'right' ? 'text-right' : 'text-left'
       }`}
     >
@@ -542,11 +542,11 @@ function HeaderCell({
 
 function SummaryCard({ summary }: { summary: SessionSummary }) {
   const statusColors: Record<string, string> = {
-    ok: 'border-green-200 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950/40 dark:text-green-300',
+    ok: 'border-emerald-200 bg-emerald-50/90 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300',
     warning:
-      'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300',
-    critical: 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300',
-    unknown: 'border-slate-200 bg-slate-100 text-slate-800 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300',
+      'border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300',
+    critical: 'border-rose-200 bg-gradient-to-r from-rose-50 to-orange-50 text-rose-900 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300',
+    unknown: 'border-orange-200 bg-orange-50/80 text-stone-800 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300',
   };
 
   const statusIcon: Record<string, string> = {
@@ -557,21 +557,21 @@ function SummaryCard({ summary }: { summary: SessionSummary }) {
   };
 
   return (
-    <section className={`shrink-0 rounded-lg border p-4 ${statusColors[summary.overallStatus]}`}>
+    <section className={`shrink-0 rounded-md border p-3 ${statusColors[summary.overallStatus]}`}>
       <div className="flex items-start gap-3">
-        <div className="flex h-7 min-w-7 items-center justify-center rounded-md border border-current/20 bg-white/50 text-xs font-bold dark:bg-transparent">
+        <div className="flex h-6 min-w-6 items-center justify-center rounded-md border border-current/20 bg-white/50 text-[10px] font-bold dark:bg-transparent">
           {statusIcon[summary.overallStatus]}
         </div>
 
         <div className="flex-1">
-          <h2 className="mb-2 text-sm font-semibold">{summary.primaryFinding}</h2>
+          <h2 className="mb-1.5 text-[13px] font-semibold">{summary.primaryFinding}</h2>
 
           {summary.secondaryFindings.length > 0 && (
             <div className="mb-3">
               <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide opacity-80">
                 Observations
               </h3>
-              <ul className="list-disc list-inside space-y-1 text-sm">
+              <ul className="list-disc list-inside space-y-0.5 text-[13px]">
                 {summary.secondaryFindings.map((finding, index) => (
                   <li key={index}>{finding}</li>
                 ))}
@@ -584,7 +584,7 @@ function SummaryCard({ summary }: { summary: SessionSummary }) {
               <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide opacity-80">
                 Recommended Actions
               </h3>
-              <ul className="list-disc list-inside space-y-1 text-sm">
+              <ul className="list-disc list-inside space-y-0.5 text-[13px]">
                 {summary.recommendedNextSteps.map((step, index) => (
                   <li key={index}>{step}</li>
                 ))}
@@ -616,62 +616,62 @@ function HopRow({ hop }: { hop: HopSample }) {
   const ipDisplay = hop.ip && hop.hostname ? hop.ip : '';
 
   return (
-    <tr className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/70">
-      <td className="whitespace-nowrap px-3 py-2.5">
-        <span className={`inline-block h-2.5 w-2.5 rounded-full ${statusColors[hop.status]}`} />
+    <tr className="transition-colors hover:bg-orange-50/70 dark:hover:bg-stone-900/80">
+      <td className="whitespace-nowrap px-2.5 py-2">
+        <span className={`inline-block h-2 w-2 rounded-full ${statusColors[hop.status]}`} />
       </td>
-      <td className="whitespace-nowrap px-3 py-2.5 text-sm font-semibold text-slate-900 dark:text-slate-100">
+      <td className="whitespace-nowrap px-2.5 py-2 text-[13px] font-semibold text-stone-900 dark:text-stone-100">
         {hop.index}
       </td>
-      <td className="px-3 py-2.5">
-        <div className="min-w-[220px] text-sm">
-          <div className="truncate font-medium text-slate-900 dark:text-slate-100">
+      <td className="px-2.5 py-2">
+        <div className="min-w-[180px] text-[13px]">
+          <div className="truncate font-medium text-stone-900 dark:text-stone-100">
             {hostDisplay}
           </div>
           {ipDisplay && (
-            <div className="truncate text-[11px] text-slate-500 dark:text-slate-400">
+            <div className="truncate text-[10px] text-stone-500 dark:text-stone-400">
               {ipDisplay}
             </div>
           )}
         </div>
       </td>
-      <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums">
-        <span className={hop.stats.lossPercent > 5 ? 'font-semibold text-red-600 dark:text-red-400' : ''}>
+      <td className="whitespace-nowrap px-2.5 py-2 text-right text-[13px] tabular-nums">
+        <span className={hop.stats.lossPercent > 5 ? 'font-semibold text-rose-600 dark:text-rose-400' : ''}>
           {hop.stats.lossPercent.toFixed(1)}%
         </span>
       </td>
-      <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums text-slate-600 dark:text-slate-400">
+      <td className="whitespace-nowrap px-2.5 py-2 text-right text-[13px] tabular-nums text-stone-600 dark:text-stone-400">
         {hop.stats.sent}
       </td>
-      <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums text-slate-600 dark:text-slate-400">
+      <td className="whitespace-nowrap px-2.5 py-2 text-right text-[13px] tabular-nums text-stone-600 dark:text-stone-400">
         {hop.stats.received}
       </td>
-      <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums text-slate-600 dark:text-slate-400">
+      <td className="whitespace-nowrap px-2.5 py-2 text-right text-[13px] tabular-nums text-stone-600 dark:text-stone-400">
         {formatMs(hop.stats.bestMs)}
       </td>
-      <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums">
-        <span className={hop.stats.avgMs && hop.stats.avgMs > 100 ? 'text-amber-600 dark:text-amber-400' : ''}>
+      <td className="whitespace-nowrap px-2.5 py-2 text-right text-[13px] tabular-nums">
+        <span className={hop.stats.avgMs && hop.stats.avgMs > 100 ? 'text-orange-600 dark:text-orange-400' : ''}>
           {formatMs(hop.stats.avgMs)}
         </span>
       </td>
-      <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums text-slate-600 dark:text-slate-400">
+      <td className="whitespace-nowrap px-2.5 py-2 text-right text-[13px] tabular-nums text-stone-600 dark:text-stone-400">
         {formatMs(hop.stats.worstMs)}
       </td>
-      <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums text-slate-600 dark:text-slate-400">
+      <td className="whitespace-nowrap px-2.5 py-2 text-right text-[13px] tabular-nums text-stone-600 dark:text-stone-400">
         {formatMs(hop.stats.lastMs)}
       </td>
-      <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums">
-        <span className={hop.stats.jitterMs && hop.stats.jitterMs > 30 ? 'text-amber-600 dark:text-amber-400' : ''}>
+      <td className="whitespace-nowrap px-2.5 py-2 text-right text-[13px] tabular-nums">
+        <span className={hop.stats.jitterMs && hop.stats.jitterMs > 30 ? 'text-orange-600 dark:text-orange-400' : ''}>
           {formatMs(hop.stats.jitterMs)}
         </span>
       </td>
-      <td className="max-w-sm px-3 py-2.5 text-sm">
+      <td className="max-w-sm px-2.5 py-2 text-[13px]">
         {hop.interpretation && (
           <div className="space-y-0.5">
-            <div className="font-medium text-slate-900 dark:text-slate-100">
+            <div className="font-medium text-stone-900 dark:text-stone-100">
               {hop.interpretation.headline}
             </div>
-            <div className="line-clamp-2 text-xs text-slate-500 dark:text-slate-400">
+            <div className="line-clamp-2 text-[11px] text-stone-500 dark:text-stone-400">
               {hop.interpretation.explanation}
             </div>
           </div>
@@ -690,10 +690,10 @@ function SettingsView({
 }) {
   return (
     <div className="mx-auto h-full w-full max-w-3xl overflow-auto">
-      <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="mb-5 text-base font-semibold">Settings</h2>
+      <div className="rounded-md border border-orange-200/70 bg-white/82 p-4 shadow-sm shadow-orange-200/25 dark:border-orange-950/70 dark:bg-stone-950/72">
+        <h2 className="mb-4 text-sm font-semibold">Settings</h2>
 
-        <div className="space-y-5">
+        <div className="space-y-4">
           <Field label="Theme">
             <select
               value={settings.theme}
@@ -786,11 +786,11 @@ function Field({
 }) {
   return (
     <div>
-      <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+      <label className="mb-1.5 block text-[13px] font-medium text-stone-700 dark:text-stone-300">
         {label}
       </label>
       {children}
-      {hint && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{hint}</p>}
+      {hint && <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">{hint}</p>}
     </div>
   );
 }
@@ -807,6 +807,6 @@ function upsertHop(current: HopSample[], nextHop: HopSample): HopSample[] {
 }
 
 const inputClassName =
-  'w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white';
+  'w-full rounded-md border border-orange-200 bg-orange-50/70 px-3 py-1.5 text-[13px] shadow-sm focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 dark:border-stone-700 dark:bg-stone-900 dark:text-white';
 
 export default App;
