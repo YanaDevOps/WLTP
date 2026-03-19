@@ -451,11 +451,11 @@ function MainView({
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
-            <table className="w-full table-fixed divide-y divide-orange-100 dark:divide-stone-800">
+            <table className="w-full table-auto divide-y divide-orange-100 dark:divide-stone-800">
               <colgroup>
                 <col className="w-6" />
                 <col className="w-8" />
-                <col className="w-[15%]" />
+                <col />
                 <col className="w-11" />
                 <col className="w-10" />
                 <col className="w-10" />
@@ -464,7 +464,7 @@ function MainView({
                 <col className="w-11" />
                 <col className="w-11" />
                 <col className="w-12" />
-                <col className="w-[30%]" />
+                <col className="w-[32%]" />
               </colgroup>
               <thead className="sticky top-0 z-10 bg-gradient-to-r from-orange-50 to-rose-50 dark:from-stone-950 dark:to-stone-900">
                 <tr>
@@ -631,8 +631,8 @@ function HopRow({ hop }: { hop: HopSample }) {
       <td className="whitespace-nowrap px-1 py-1.5 text-[12px] font-semibold text-stone-900 dark:text-stone-100">
         {hop.index}
       </td>
-      <td className="px-1 pr-0.5 py-1">
-        <div className="text-[12px]">
+      <td className="px-1 pr-0.5 py-1 whitespace-nowrap">
+        <div className="max-w-[14rem] text-[12px]">
           <div className="truncate font-medium text-stone-900 dark:text-stone-100">
             {hostDisplay}
           </div>
