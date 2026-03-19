@@ -715,44 +715,55 @@ function SettingsView({
 
         <div className="space-y-2.5">
           <Field label={copy.settings.languageLabel}>
-            <select
-              value={settings.language}
-              onChange={(e) =>
-                onChange({ ...settings, language: e.target.value as Settings['language'] })
-              }
-              className={inputClassName}
-            >
-              <option value="en">{copy.settings.languageEnglish}</option>
-              <option value="ru">{copy.settings.languageRussian}</option>
-            </select>
+            <div className="relative">
+              <select
+                value={settings.language}
+                onChange={(e) =>
+                  onChange({ ...settings, language: e.target.value as Settings['language'] })
+                }
+                className={selectClassName}
+              >
+                <option value="en">{copy.settings.languageEnglish}</option>
+                <option value="ru">{copy.settings.languageRussian}</option>
+              </select>
+              <SelectChevron />
+            </div>
           </Field>
 
           <Field label={copy.settings.themeLabel}>
-            <select
-              value={settings.theme}
-              onChange={(e) => onChange({ ...settings, theme: e.target.value as Settings['theme'] })}
-              className={inputClassName}
-            >
-              <option value="system">{copy.settings.themeSystem}</option>
-              <option value="light">{copy.settings.themeLight}</option>
-              <option value="dark">{copy.settings.themeDark}</option>
-            </select>
+            <div className="relative">
+              <select
+                value={settings.theme}
+                onChange={(e) =>
+                  onChange({ ...settings, theme: e.target.value as Settings['theme'] })
+                }
+                className={selectClassName}
+              >
+                <option value="system">{copy.settings.themeSystem}</option>
+                <option value="light">{copy.settings.themeLight}</option>
+                <option value="dark">{copy.settings.themeDark}</option>
+              </select>
+              <SelectChevron />
+            </div>
           </Field>
 
           <Field label={copy.settings.explanationLevelLabel}>
-            <select
-              value={settings.explanationLevel}
-              onChange={(e) =>
-                onChange({
-                  ...settings,
-                  explanationLevel: e.target.value as Settings['explanationLevel'],
-                })
-              }
-              className={inputClassName}
-            >
-              <option value="simple">{copy.settings.explanationSimple}</option>
-              <option value="detailed">{copy.settings.explanationDetailed}</option>
-            </select>
+            <div className="relative">
+              <select
+                value={settings.explanationLevel}
+                onChange={(e) =>
+                  onChange({
+                    ...settings,
+                    explanationLevel: e.target.value as Settings['explanationLevel'],
+                  })
+                }
+                className={selectClassName}
+              >
+                <option value="simple">{copy.settings.explanationSimple}</option>
+                <option value="detailed">{copy.settings.explanationDetailed}</option>
+              </select>
+              <SelectChevron />
+            </div>
           </Field>
 
           <Field label={copy.settings.probeIntervalLabel} hint={copy.settings.probeIntervalHint}>
@@ -825,6 +836,20 @@ function Field({
       {children}
       {hint && <p className="mt-1 text-[10px] text-stone-500 dark:text-stone-400">{hint}</p>}
     </div>
+  );
+}
+
+function SelectChevron() {
+  return (
+    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-stone-500 dark:text-stone-400">
+      <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+        <path
+          fillRule="evenodd"
+          d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+          clipRule="evenodd"
+        />
+      </svg>
+    </span>
   );
 }
 
@@ -962,5 +987,6 @@ type UICopy = (typeof UI_TEXT)[keyof typeof UI_TEXT];
 
 const inputClassName =
   'w-full rounded-md border border-orange-200 bg-orange-50/70 px-3 py-1.5 text-[12px] shadow-sm focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 dark:border-stone-700 dark:bg-stone-900 dark:text-white';
+const selectClassName = `${inputClassName} appearance-none pr-9`;
 
 export default App;
