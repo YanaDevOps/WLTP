@@ -710,7 +710,7 @@ function SettingsView({
 }) {
   return (
     <div className="mx-auto h-full w-full max-w-3xl overflow-auto">
-      <div className="rounded-md border border-orange-200/70 bg-white/82 p-3 shadow-sm shadow-orange-200/25 dark:border-orange-950/70 dark:bg-stone-950/72">
+      <div className="rounded-md border border-orange-200/70 bg-white/82 p-3 shadow-sm shadow-orange-200/25 dark:border-transparent dark:bg-stone-950/72">
         <h2 className="mb-2 text-[13px] font-semibold">{copy.settingsTitle}</h2>
 
         <div className="space-y-2.5">
