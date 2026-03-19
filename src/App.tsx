@@ -463,8 +463,8 @@ function MainView({
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             <table className="w-full table-auto divide-y divide-orange-100 dark:divide-stone-800">
               <colgroup>
-                <col className="w-6" />
-                <col className="w-8" />
+                <col className="w-7" />
+                <col className="w-9" />
                 <col />
                 <col className="w-11" />
                 <col className="w-10" />
@@ -478,8 +478,8 @@ function MainView({
               </colgroup>
               <thead className="sticky top-0 z-10 bg-gradient-to-r from-orange-50 to-rose-50 dark:from-stone-950 dark:to-stone-900">
                 <tr>
-                  <HeaderCell>{copy.table.status}</HeaderCell>
-                  <HeaderCell>{copy.table.hop}</HeaderCell>
+                  <HeaderCell className="pr-2">{copy.table.status}</HeaderCell>
+                  <HeaderCell className="pl-2">{copy.table.hop}</HeaderCell>
                   <HeaderCell className="pr-1">{copy.table.host}</HeaderCell>
                   <HeaderCell align="right" className="pl-1">{copy.table.loss}</HeaderCell>
                   <HeaderCell align="right">{copy.table.sent}</HeaderCell>
@@ -635,10 +635,10 @@ function HopRow({ hop }: { hop: HopSample }) {
 
   return (
     <tr className="transition-colors hover:bg-orange-50/70 dark:hover:bg-stone-900/80">
-      <td className="whitespace-nowrap px-1.5 py-1">
+      <td className="whitespace-nowrap px-1.5 py-1 pr-2">
         <span className={`inline-block h-1.5 w-1.5 rounded-full ${statusColors[hop.status]}`} />
       </td>
-      <td className="whitespace-nowrap px-1 py-1.5 text-[12px] font-semibold text-stone-900 dark:text-stone-100">
+      <td className="whitespace-nowrap px-1 py-1.5 pl-2 text-[12px] font-semibold text-stone-900 dark:text-stone-100">
         {hop.index}
       </td>
       <td className="px-1 pr-0.5 py-1 whitespace-nowrap">
