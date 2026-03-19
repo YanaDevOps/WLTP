@@ -596,9 +596,7 @@ impl InterpretationEngine {
 
             // Add default recommendations if none
             if recommendations.is_empty() {
-                if overall_status == Severity::Ok {
-                    recommendations.push("No action needed - connection is healthy".to_string());
-                } else {
+                if overall_status != Severity::Ok {
                     recommendations.push("Monitor the connection for changes".to_string());
                     recommendations.push(
                         "Share this report with technical support if issues persist".to_string(),

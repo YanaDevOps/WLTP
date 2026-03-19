@@ -36,7 +36,7 @@ function App() {
     defaultMaxHops: 30,
     defaultTimeoutMs: 1000,
   });
-  const copy = UI_TEXT[settings.language];
+  const copy = settings.language === 'ru' ? RUSSIAN_UI_TEXT : UI_TEXT.en;
 
   useEffect(() => {
     getSettings().then(setSettings).catch(console.error);
@@ -246,7 +246,7 @@ function App() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[radial-gradient(circle_at_top,#fde7d7_0%,#f6d4c5_28%,#efe5dd_58%,#e8ddd5_100%)] text-stone-900 dark:bg-[radial-gradient(circle_at_top,#4b2a2a_0%,#2b1d24_35%,#171318_72%,#0f0d12_100%)] dark:text-stone-100">
-      <div className="mx-auto flex h-full w-full max-w-[1080px] flex-col">
+      <div className="mx-auto flex h-full w-full max-w-[960px] flex-col">
         <header className="shrink-0 border-b border-orange-200/70 bg-white/75 backdrop-blur-md dark:border-orange-950/70 dark:bg-stone-950/60">
           <div className="flex h-11 items-center justify-between px-2.5 sm:px-3">
             <div className="flex items-center gap-2">
@@ -289,6 +289,7 @@ function App() {
               onExportJson={handleExportJson}
               session={session}
               copy={copy}
+              language={settings.language}
             />
           ) : (
             <SettingsView settings={settings} onChange={handleSettingsChange} copy={copy} />
@@ -335,6 +336,7 @@ interface MainViewProps {
   onExportJson: () => void;
   session: TraceSession | null;
   copy: UICopy;
+  language: Settings['language'];
 }
 
 function MainView({
@@ -350,51 +352,53 @@ function MainView({
   onExportJson,
   session,
   copy,
+  language,
 }: MainViewProps) {
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
       <section className="shrink-0 rounded-md border border-orange-200/70 bg-white/82 shadow-sm shadow-orange-200/30 backdrop-blur-sm dark:border-orange-950/70 dark:bg-stone-950/72 dark:shadow-black/20">
         <div className="flex flex-col gap-2 p-2.5">
-          <div className="flex flex-col gap-2 lg:flex-row lg:items-end">
-            <div className="flex-1">
-              <label
-                htmlFor="target"
-                className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-500 dark:text-stone-400"
-              >
-                {copy.targetLabel}
-              </label>
-              <input
-                id="target"
-                type="text"
-                value={target}
-                onChange={(e) => setTarget(e.target.value)}
-                placeholder={copy.targetPlaceholder}
-                disabled={isRunning}
-                className="w-full rounded-md border border-orange-200 bg-orange-50/70 px-3 py-1.5 text-[13px] shadow-sm outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 disabled:opacity-50 dark:border-stone-700 dark:bg-stone-900 dark:text-white"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !isRunning) {
-                    onStart();
-                  }
-                }}
-              />
-            </div>
-
-            <div className="flex items-end gap-1">
-              {!isRunning ? (
-                <button
-                  onClick={onStart}
-                  className="rounded-md bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 px-3 py-1.5 text-[12px] font-semibold text-white shadow-sm shadow-orange-500/25 transition hover:from-amber-600 hover:via-orange-600 hover:to-rose-600"
-                >
-                  {copy.startTrace}
-                </button>
-              ) : (
-                <button
-                  onClick={onStop}
-                  className="rounded-md bg-gradient-to-r from-rose-500 to-red-500 px-3 py-1.5 text-[12px] font-semibold text-white shadow-sm shadow-rose-500/25 transition hover:from-rose-600 hover:to-red-600"
-                >
-                  {copy.stopTrace}
-                </button>
-              )}
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor="target"
+              className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-500 dark:text-stone-400"
+            >
+              {copy.targetLabel}
+            </label>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="w-full sm:max-w-[18rem]">
+                <input
+                  id="target"
+                  type="text"
+                  value={target}
+                  onChange={(e) => setTarget(e.target.value)}
+                  placeholder={copy.targetPlaceholder}
+                  disabled={isRunning}
+                  className="w-full rounded-md border border-orange-200 bg-orange-50/70 px-3 py-1.5 text-[13px] shadow-sm outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 disabled:opacity-50 dark:border-stone-700 dark:bg-stone-900 dark:text-white"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !isRunning) {
+                      onStart();
+                    }
+                  }}
+                />
+              </div>
+              <div className="flex items-center gap-1">
+                {!isRunning ? (
+                  <button
+                    onClick={onStart}
+                    className="rounded-md bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 px-3 py-1.5 text-[12px] font-semibold text-white shadow-sm shadow-orange-500/25 transition hover:from-amber-600 hover:via-orange-600 hover:to-rose-600"
+                  >
+                    {copy.startTrace}
+                  </button>
+                ) : (
+                  <button
+                    onClick={onStop}
+                    className="rounded-md bg-gradient-to-r from-rose-500 to-red-500 px-3 py-1.5 text-[12px] font-semibold text-white shadow-sm shadow-rose-500/25 transition hover:from-rose-600 hover:to-red-600"
+                  >
+                    {copy.stopTrace}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -424,7 +428,7 @@ function MainView({
         </div>
       </section>
 
-      {!isRunning && summary && <SummaryCard summary={summary} copy={copy} />}
+      {!isRunning && summary && <SummaryCard summary={summary} copy={copy} language={language} />}
 
       {isRunning && (
         <section className="shrink-0 rounded-md border border-orange-200/80 bg-gradient-to-r from-amber-50 via-orange-50 to-rose-50 px-2 py-1.5 text-orange-950 shadow-sm shadow-orange-200/30 dark:border-orange-950/80 dark:bg-gradient-to-r dark:from-amber-950/30 dark:via-orange-950/25 dark:to-rose-950/30 dark:text-orange-200">
@@ -462,25 +466,11 @@ function MainView({
 
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             <table className="w-full table-auto divide-y divide-orange-100 dark:divide-stone-800">
-              <colgroup>
-                <col className="w-7" />
-                <col className="w-9" />
-                <col />
-                <col className="w-11" />
-                <col className="w-10" />
-                <col className="w-10" />
-                <col className="w-11" />
-                <col className="w-11" />
-                <col className="w-11" />
-                <col className="w-11" />
-                <col className="w-12" />
-                <col className="w-[32%]" />
-              </colgroup>
               <thead className="sticky top-0 z-10 bg-gradient-to-r from-orange-50 to-rose-50 dark:from-stone-950 dark:to-stone-900">
                 <tr>
                   <HeaderCell className="pr-2">{copy.table.status}</HeaderCell>
                   <HeaderCell className="pl-2">{copy.table.hop}</HeaderCell>
-                  <HeaderCell className="pr-1">{copy.table.host}</HeaderCell>
+                  <HeaderCell>{copy.table.host}</HeaderCell>
                   <HeaderCell align="right" className="pl-1">{copy.table.loss}</HeaderCell>
                   <HeaderCell align="right">{copy.table.sent}</HeaderCell>
                   <HeaderCell align="right">{copy.table.received}</HeaderCell>
@@ -488,14 +478,18 @@ function MainView({
                   <HeaderCell align="right">{copy.table.avg}</HeaderCell>
                   <HeaderCell align="right">{copy.table.worst}</HeaderCell>
                   <HeaderCell align="right">{copy.table.last}</HeaderCell>
-                  <HeaderCell align="right" className="pr-2">{copy.table.jitter}</HeaderCell>
                   <HeaderCell className="pl-3">{copy.table.interpretation}</HeaderCell>
                 </tr>
               </thead>
 
               <tbody className="divide-y divide-orange-100 bg-white/90 dark:divide-stone-800 dark:bg-stone-950/80">
                 {hops.map((hop, index) => (
-                  <HopRow key={hop.index} hop={hop} isDestination={index === hops.length - 1} />
+                  <HopRow
+                    key={hop.index}
+                    hop={hop}
+                    isDestination={index === hops.length - 1}
+                    language={language}
+                  />
                 ))}
               </tbody>
             </table>
@@ -558,7 +552,15 @@ function HeaderCell({
   );
 }
 
-function SummaryCard({ summary, copy }: { summary: SessionSummary; copy: UICopy }) {
+function SummaryCard({
+  summary,
+  copy,
+  language,
+}: {
+  summary: SessionSummary;
+  copy: UICopy;
+  language: Settings['language'];
+}) {
   const statusColors: Record<string, string> = {
     ok: 'border-emerald-300 bg-emerald-100/90 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/35 dark:text-emerald-300',
     warning:
@@ -573,37 +575,49 @@ function SummaryCard({ summary, copy }: { summary: SessionSummary; copy: UICopy 
     critical: 'X',
     unknown: '?',
   };
+  const primaryFinding = localizeDisplayText(summary.primaryFinding, language);
+  const observations = localizeDisplayList(summary.secondaryFindings, language);
+  const recommendations = localizeDisplayList(summary.recommendedNextSteps, language);
+  const isHealthy = summary.overallStatus === 'ok';
 
   return (
-    <section className={`shrink-0 rounded-md border p-2 ${statusColors[summary.overallStatus]}`}>
+    <section
+      className={`shrink-0 rounded-md border ${isHealthy ? 'p-1.5' : 'p-2'} ${statusColors[summary.overallStatus]}`}
+    >
       <div className="flex items-start gap-2">
         <div className="flex h-6 min-w-6 items-center justify-center rounded-md border border-current/20 bg-white/50 text-[10px] font-bold dark:bg-transparent">
           {statusIcon[summary.overallStatus]}
         </div>
 
         <div className="flex-1">
-          <h2 className="mb-1 text-[12px] font-semibold">{summary.primaryFinding}</h2>
+          <h2 className="mb-1 text-[12px] font-semibold">{primaryFinding}</h2>
 
-          {summary.secondaryFindings.length > 0 && (
-            <div className="mb-3">
-              <h3 className="mb-1 text-[10px] font-semibold uppercase tracking-wide opacity-80">
-                {copy.summaryObservations}
-              </h3>
-              <ul className="list-disc list-inside space-y-0.5 text-[12px]">
-                {summary.secondaryFindings.map((finding, index) => (
-                  <li key={index}>{finding}</li>
-                ))}
-              </ul>
+          {observations.length > 0 && (
+            <div className={isHealthy ? '' : 'mb-3'}>
+              {isHealthy ? (
+                <p className="text-[12px] leading-snug opacity-90">{observations[0]}</p>
+              ) : (
+                <>
+                  <h3 className="mb-1 text-[10px] font-semibold uppercase tracking-wide opacity-80">
+                    {copy.summaryObservations}
+                  </h3>
+                  <ul className="list-disc list-inside space-y-0.5 text-[12px]">
+                    {observations.map((finding, index) => (
+                      <li key={index}>{finding}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
             </div>
           )}
 
-          {summary.recommendedNextSteps.length > 0 && (
+          {!isHealthy && recommendations.length > 0 && (
             <div>
               <h3 className="mb-1 text-[10px] font-semibold uppercase tracking-wide opacity-80">
                 {copy.summaryActions}
               </h3>
               <ul className="list-disc list-inside space-y-0.5 text-[12px]">
-                {summary.recommendedNextSteps.map((step, index) => (
+                {recommendations.map((step, index) => (
                   <li key={index}>{step}</li>
                 ))}
               </ul>
@@ -615,7 +629,15 @@ function SummaryCard({ summary, copy }: { summary: SessionSummary; copy: UICopy 
   );
 }
 
-function HopRow({ hop, isDestination }: { hop: HopSample; isDestination: boolean }) {
+function HopRow({
+  hop,
+  isDestination,
+  language,
+}: {
+  hop: HopSample;
+  isDestination: boolean;
+  language: Settings['language'];
+}) {
   const statusColors: Record<string, string> = {
     ok: 'bg-green-500',
     warning: 'bg-amber-500',
@@ -632,6 +654,7 @@ function HopRow({ hop, isDestination }: { hop: HopSample; isDestination: boolean
 
   const hostDisplay = hop.hostname || hop.ip || '*';
   const ipDisplay = hop.ip && hop.hostname ? hop.ip : '';
+  const hostTitle = ipDisplay ? `${hostDisplay}\n${ipDisplay}` : hostDisplay;
   const destinationHealthy = isDestination && hop.stats.lossPercent === 0;
   const destinationProblem = isDestination && hop.stats.lossPercent > 0;
   const destinationAccentClass = destinationHealthy
@@ -650,8 +673,8 @@ function HopRow({ hop, isDestination }: { hop: HopSample; isDestination: boolean
       >
         {hop.index}
       </td>
-      <td className="px-1 pr-0.5 py-1 whitespace-nowrap">
-        <div className={`max-w-[14rem] text-[12px] ${destinationAccentClass}`}>
+      <td className="px-1 py-1 whitespace-nowrap">
+        <div className={`inline-block max-w-[9rem] text-[12px] align-top ${destinationAccentClass}`} title={hostTitle}>
           <div className="truncate font-medium">
             {hostDisplay}
           </div>
@@ -705,19 +728,14 @@ function HopRow({ hop, isDestination }: { hop: HopSample; isDestination: boolean
       <td className="whitespace-nowrap px-1 py-1.5 text-right text-[11px] tabular-nums text-stone-600 dark:text-stone-400">
         {formatMs(hop.stats.lastMs)}
       </td>
-      <td className="whitespace-nowrap px-1 py-1.5 pr-2 text-right text-[11px] tabular-nums">
-        <span className={hop.stats.jitterMs && hop.stats.jitterMs > 30 ? 'text-orange-600 dark:text-orange-400' : ''}>
-          {formatMs(hop.stats.jitterMs)}
-        </span>
-      </td>
       <td className="px-1.5 py-1.5 pl-3 text-[12px]">
         {hop.interpretation && (
           <div className="space-y-0.5">
             <div className="font-medium text-stone-900 dark:text-stone-100">
-              {hop.interpretation.headline}
+              {localizeDisplayText(hop.interpretation.headline, language)}
             </div>
             <div className="line-clamp-2 text-[10px] text-stone-500 dark:text-stone-400">
-              {hop.interpretation.explanation}
+              {localizeDisplayText(hop.interpretation.explanation, language)}
             </div>
           </div>
         )}
@@ -891,6 +909,135 @@ function upsertHop(current: HopSample[], nextHop: HopSample): HopSample[] {
   return updated;
 }
 
+function localizeDisplayList(items: string[], language: Settings['language']): string[] {
+  return items.map((item) => localizeDisplayText(item, language));
+}
+
+function localizeDisplayText(text: string, language: Settings['language']): string {
+  if (language !== 'ru') {
+    return text;
+  }
+
+  const exact: Record<string, string> = {
+    'Connection looks stable': 'Соединение выглядит стабильным',
+    'No significant issues detected along the route': 'Существенных проблем по маршруту не обнаружено',
+    'No trace data available': 'Нет данных трассировки',
+    'The trace did not complete or no hops were discovered':
+      'Трассировка не завершилась или хопы не были обнаружены',
+    'Try running the trace again': 'Попробуйте запустить трассировку ещё раз',
+    'Target is not replying': 'Цель не отвечает',
+    'Destination not responding': 'Назначение не отвечает',
+    'This hop ignores ping replies': 'Этот хоп игнорирует ответы на ping',
+    'Hop not responding (may be normal)': 'Хоп не отвечает (это может быть нормой)',
+    'Traffic likely stops here': 'Трафик, вероятно, обрывается здесь',
+    'Connection lost at this hop': 'Соединение теряется на этом хопе',
+    'The server may be offline': 'Сервер может быть недоступен',
+    'A firewall may be blocking ping replies': 'Firewall может блокировать ответы на ping',
+    'The route may not be reaching the destination': 'Маршрут может не доходить до назначения',
+    'The router may be rate-limiting ping': 'Роутер может ограничивать ответы на ping',
+    'This device may deprioritize control traffic':
+      'Устройство может занижать приоритет служебного трафика',
+    'ICMP could be filtered at this hop': 'ICMP может фильтроваться на этом хопе',
+    'A router or link may be down': 'Роутер или линк могут быть недоступны',
+    'Routing may be broken at this point': 'Маршрутизация может ломаться в этой точке',
+    'Heavy congestion may be dropping packets': 'Сильная перегрузка может приводить к потере пакетов',
+    'The router may be rate-limiting ICMP': 'Роутер может ограничивать ICMP',
+    'This device may give low priority to ping replies':
+      'Устройство может давать низкий приоритет ответам на ping',
+    'The control plane could be busy even while forwarding stays normal':
+      'Служебная плоскость может быть загружена, даже если пересылка трафика работает нормально',
+    'There may be congestion between you and the target': 'Между вами и целью может быть перегрузка',
+    'The target may be overloaded': 'Цель может быть перегружена',
+    'Your connection may be unstable': 'Ваше соединение может быть нестабильным',
+    'An ISP or routing issue may be involved': 'Проблема может быть у провайдера или в маршрутизации',
+    'This network segment may be congested': 'Этот сегмент сети может быть перегружен',
+    'This router or link may have a fault': 'У этого роутера или линка может быть неисправность',
+    'Link capacity may be saturated': 'Канал может быть перегружен',
+    'ISP peering could be unstable': 'Стыковка с провайдером может быть нестабильной',
+    'ICMP may be rate-limited here': 'ICMP может ограничиваться на этом хопе',
+    'There may be temporary congestion': 'Здесь может быть временная перегрузка',
+    'Load balancing can make traceroute look uneven':
+      'Балансировка нагрузки может делать traceroute неровным',
+    'The route may cover a long geographic distance':
+      'Маршрут может проходить через большое расстояние',
+    'There may be congestion near the destination': 'Возле назначения может быть перегрузка',
+    'The route may cross a long-distance link': 'Маршрут может проходить через дальний линк',
+    'There may be an oversubscribed peering point': 'Точка стыка сетей может быть перегружена',
+    'A tunnel or VPN can add delay here': 'Туннель или VPN могут добавлять задержку здесь',
+    'The router control plane may answer slowly':
+      'Служебная плоскость роутера может отвечать медленно',
+    'ICMP processing overhead can inflate this number':
+      'Нагрузка на обработку ICMP может завышать это значение',
+    'This may be normal for this network segment': 'Для этого сегмента сети это может быть нормой',
+    'There may be congestion causing queue swings': 'Перегрузка может вызывать скачки очередей',
+    'Bufferbloat on a router or modem is possible': 'Возможен bufferbloat на роутере или модеме',
+    'Wireless interference can cause jitter': 'Помехи в Wi-Fi могут вызывать джиттер',
+    'Traffic shaping may be inconsistent': 'Шейпинг трафика может работать нестабильно',
+    'ICMP processing time may vary here': 'Время обработки ICMP здесь может плавать',
+    'There may be short congestion bursts': 'Могут быть короткие всплески перегрузки',
+    'Load balancing across paths can change timings':
+      'Балансировка по разным путям может менять тайминги',
+    'Destination is not responding to ICMP requests': 'Назначение не отвечает на ICMP-запросы',
+    'Verify the destination address is correct': 'Проверьте, что адрес назначения указан верно',
+    'The server may be down or blocking ICMP': 'Сервер может быть недоступен или блокировать ICMP',
+    'Contact your ISP or the destination server administrator':
+      'Свяжитесь с провайдером или администратором целевого сервера',
+    'For VoIP/gaming issues, check for bufferbloat on your router':
+      'Для проблем с VoIP или играми проверьте bufferbloat на роутере',
+    'Issues detected starting at your local network or ISP':
+      'Проблемы начинаются в вашей локальной сети или у провайдера',
+    'Check your local network equipment (router, cables)':
+      'Проверьте локальное оборудование сети (роутер, кабели)',
+    'Restart your router/modem': 'Перезагрузите роутер или модем',
+    'Some issues detected': 'Обнаружены некоторые проблемы',
+  };
+
+  if (exact[text]) {
+    return exact[text];
+  }
+
+  const patterns: Array<[string, string]> = [
+    ['% loss here is probably harmless', '% потерь здесь, вероятно, безвредны'],
+    ['% packet loss (likely rate-limiting)', '% потерь пакетов (похоже на rate-limit)'],
+    ['% packet loss to the target', '% потерь пакетов до цели'],
+    ['% packet loss to destination', '% потерь пакетов до назначения'],
+    ['% loss starts at this hop', '% потерь начинаются на этом хопе'],
+    ['% packet loss starting here', '% потерь пакетов начинаются здесь'],
+    ['% loss only on this router', '% потерь только на этом роутере'],
+    ['% packet loss at intermediate hop', '% потерь на промежуточном хопе'],
+    ['The target is slow to answer (', 'Цель отвечает медленно ('],
+    ['High latency: ', 'Высокая задержка: '],
+    ['Delay starts around this hop (', 'Задержка начинается примерно на этом хопе ('],
+    ['Latency spike at this hop: ', 'Скачок задержки на этом хопе: '],
+    ['This hop replies slowly (', 'Этот хоп отвечает медленно ('],
+    ['Elevated latency: ', 'Повышенная задержка: '],
+    ['Latency is unstable (', 'Задержка нестабильна ('],
+    ['High jitter: ', 'Высокий джиттер: '],
+    ['This hop has unstable reply times (', 'У этого хопа нестабильное время ответа ('],
+    ['High jitter detected: ', 'Обнаружен высокий джиттер: '],
+    ['Target looks healthy (', 'Цель выглядит здоровой ('],
+    ['Destination responding normally (', 'Цель отвечает нормально ('],
+    ['This hop looks normal (', 'Этот хоп выглядит нормально ('],
+    ['Healthy (', 'Норма ('],
+    ['High packet loss at destination: ', 'Высокая потеря пакетов на назначении: '],
+    ['Moderate packet loss at destination: ', 'Умеренная потеря пакетов на назначении: '],
+    ['Very high latency to destination: ', 'Очень высокая задержка до назначения: '],
+    ['Elevated latency to destination: ', 'Повышенная задержка до назначения: '],
+    ['High jitter at destination: ', 'Высокий джиттер на назначении: '],
+    ['The route likely breaks near hop ', 'Маршрут, вероятно, обрывается около хопа '],
+    ['Packet loss begins at hop ', 'Потери пакетов начинаются на хопе '],
+    ['Latency increase begins at hop ', 'Рост задержки начинается на хопе '],
+  ];
+
+  for (const [prefix, translatedPrefix] of patterns) {
+    if (text.startsWith(prefix)) {
+      return `${translatedPrefix}${text.slice(prefix.length)}`;
+    }
+  }
+
+  return text;
+}
+
 const UI_TEXT = {
   en: {
     appSubtitle: 'WinMTR-style route diagnostics',
@@ -898,19 +1045,21 @@ const UI_TEXT = {
     navSettings: 'Settings',
     targetLabel: 'Target Host or IP',
     targetPlaceholder: 'e.g., google.com or 8.8.8.8',
-    startTrace: 'Start Trace',
+    startTrace: 'Start trace',
     stopTrace: 'Stop',
     resolvedLabel: 'Resolved',
     startedLabel: 'Started',
     traceInProgressTitle: 'Trace in progress',
-    traceInProgressHint: 'Final diagnosis appears after the route settles or when you stop the trace.',
+    traceInProgressHint:
+      'Final diagnosis appears after the route settles or when you stop the trace.',
     networkRoute: 'Network Route',
     exportHtml: 'Export HTML',
     exportJson: 'Export JSON',
     traceRunningTitle: 'Trace is running',
     traceRunningHint: 'Discovering route and waiting for the first hop responses.',
     emptyStateTitle: 'Ready to Diagnose',
-    emptyStateText: 'Enter a hostname or IP address above and click Start Trace to begin network diagnostics.',
+    emptyStateText:
+      'Enter a hostname or IP address above and click Start trace to begin network diagnostics.',
     summaryObservations: 'Observations',
     summaryActions: 'Recommended Actions',
     settingsTitle: 'Settings',
@@ -928,7 +1077,6 @@ const UI_TEXT = {
       avg: 'Avg',
       worst: 'Worst',
       last: 'Last',
-      jitter: 'Jitter',
       interpretation: 'Interpretation',
     },
     settings: {
@@ -950,67 +1098,69 @@ const UI_TEXT = {
       probeTimeoutHint: 'Timeout for each probe (100-10000 ms)',
     },
   },
-  ru: {
-    appSubtitle: 'Диагностика маршрута в стиле WinMTR',
-    navDiagnose: 'Диагностика',
-    navSettings: 'Настройки',
-    targetLabel: 'Хост или IP цели',
-    targetPlaceholder: 'например, google.com или 8.8.8.8',
-    startTrace: 'Старт',
-    stopTrace: 'Стоп',
-    resolvedLabel: 'Разрешён',
-    startedLabel: 'Запущено',
-    traceInProgressTitle: 'Трассировка выполняется',
-    traceInProgressHint: 'Итоговый диагноз появится после стабилизации маршрута или после остановки трассировки.',
-    networkRoute: 'Маршрут сети',
-    exportHtml: 'Экспорт HTML',
-    exportJson: 'Экспорт JSON',
-    traceRunningTitle: 'Трассировка выполняется',
-    traceRunningHint: 'Определяем маршрут и ждём первые ответы от хопов.',
-    emptyStateTitle: 'Готово к диагностике',
-    emptyStateText: 'Введите hostname или IP-адрес выше и нажмите «Старт», чтобы начать сетевую диагностику.',
-    summaryObservations: 'Наблюдения',
-    summaryActions: 'Рекомендуемые действия',
-    settingsTitle: 'Настройки',
-    errors: {
-      emptyTarget: 'Введите хост или IP-адрес цели',
-    },
-    table: {
-      status: 'Статус',
-      hop: 'Хоп',
-      host: 'Хост',
-      loss: 'Потери%',
-      sent: 'Отпр',
-      received: 'Получ',
-      best: 'Луч',
-      avg: 'Сред',
-      worst: 'Худш',
-      last: 'Послед',
-      jitter: 'Джитт',
-      interpretation: 'Интерпретация',
-    },
-    settings: {
-      languageLabel: 'Язык',
-      languageEnglish: 'Английский',
-      languageRussian: 'Русский',
-      themeLabel: 'Тема',
-      themeSystem: 'Системная',
-      themeLight: 'Светлая',
-      themeDark: 'Тёмная',
-      explanationLevelLabel: 'Уровень объяснений',
-      explanationSimple: 'Простой (для новичков)',
-      explanationDetailed: 'Подробный (для опытных)',
-      probeIntervalLabel: 'Интервал проб (мс)',
-      probeIntervalHint: 'Время между пробами (100-10000 мс)',
-      maximumHopsLabel: 'Максимум хопов',
-      maximumHopsHint: 'Максимальное количество хопов (1-64)',
-      probeTimeoutLabel: 'Таймаут пробы (мс)',
-      probeTimeoutHint: 'Таймаут для каждой пробы (100-10000 мс)',
-    },
+} as const;
+
+const RUSSIAN_UI_TEXT = {
+  appSubtitle: 'Диагностика маршрута в стиле WinMTR',
+  navDiagnose: 'Диагностика',
+  navSettings: 'Настройки',
+  targetLabel: 'Хост или IP цели',
+  targetPlaceholder: 'например, google.com или 8.8.8.8',
+  startTrace: 'Start trace',
+  stopTrace: 'Stop',
+  resolvedLabel: 'Разрешён',
+  startedLabel: 'Запущено',
+  traceInProgressTitle: 'Трассировка выполняется',
+  traceInProgressHint:
+    'Итоговый диагноз появится после стабилизации маршрута или после остановки трассировки.',
+  networkRoute: 'Маршрут сети',
+  exportHtml: 'Экспорт HTML',
+  exportJson: 'Экспорт JSON',
+  traceRunningTitle: 'Трассировка выполняется',
+  traceRunningHint: 'Определяем маршрут и ждём первые ответы от хопов.',
+  emptyStateTitle: 'Готово к диагностике',
+  emptyStateText:
+    'Введите hostname или IP-адрес выше и нажмите Start trace, чтобы начать сетевую диагностику.',
+  summaryObservations: 'Наблюдения',
+  summaryActions: 'Рекомендуемые действия',
+  settingsTitle: 'Настройки',
+  errors: {
+    emptyTarget: 'Введите хост или IP-адрес цели',
+  },
+  table: {
+    status: 'Статус',
+    hop: 'Хоп',
+    host: 'Хост',
+    loss: 'Потери%',
+    sent: 'Отпр',
+    received: 'Получ',
+    best: 'Луч',
+    avg: 'Сред',
+    worst: 'Худш',
+    last: 'Послед',
+    interpretation: 'Интерпретация',
+  },
+  settings: {
+    languageLabel: 'Язык',
+    languageEnglish: 'Английский',
+    languageRussian: 'Русский',
+    themeLabel: 'Тема',
+    themeSystem: 'Системная',
+    themeLight: 'Светлая',
+    themeDark: 'Тёмная',
+    explanationLevelLabel: 'Уровень объяснений',
+    explanationSimple: 'Простой (для новичков)',
+    explanationDetailed: 'Подробный (для опытных)',
+    probeIntervalLabel: 'Интервал проб (мс)',
+    probeIntervalHint: 'Время между пробами (100-10000 мс)',
+    maximumHopsLabel: 'Максимум хопов',
+    maximumHopsHint: 'Максимальное количество хопов (1-64)',
+    probeTimeoutLabel: 'Таймаут пробы (мс)',
+    probeTimeoutHint: 'Таймаут для каждой пробы (100-10000 мс)',
   },
 } as const;
 
-type UICopy = (typeof UI_TEXT)[keyof typeof UI_TEXT];
+type UICopy = (typeof UI_TEXT)[keyof typeof UI_TEXT] | typeof RUSSIAN_UI_TEXT;
 
 const inputClassName =
   'w-full rounded-md border border-orange-200 bg-orange-50/70 px-3 py-1.5 text-[12px] shadow-sm focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 dark:border-stone-700 dark:bg-stone-900 dark:text-white';
