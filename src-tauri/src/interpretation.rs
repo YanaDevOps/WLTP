@@ -107,7 +107,7 @@ impl InterpretationEngine {
 
     fn interpret_no_response(
         &self,
-        hop: &HopSample,
+        _hop: &HopSample,
         is_destination: bool,
         next_hops: &[&HopSample],
         level: ExplanationLevel,

@@ -229,12 +229,12 @@ pub async fn get_session_hops(
 pub async fn interpret_hops(
     state: State<'_, Arc<AppState>>,
     hops: Vec<HopSample>,
-) -> SessionSummary {
+) -> Result<SessionSummary, String> {
     let settings = state.settings.read().await.clone();
     let interpreted = state
         .engine
         .annotate_hops(&hops, settings.explanation_level);
-    state.engine.generate_summary(&interpreted)
+    Ok(state.engine.generate_summary(&interpreted))
 }
 
 /// Export session data as JSON
