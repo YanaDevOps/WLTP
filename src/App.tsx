@@ -450,8 +450,22 @@ function MainView({
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-auto">
-            <table className="min-w-[980px] w-full divide-y divide-orange-100 dark:divide-stone-800">
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+            <table className="w-full table-fixed divide-y divide-orange-100 dark:divide-stone-800">
+              <colgroup>
+                <col className="w-6" />
+                <col className="w-8" />
+                <col className="w-[17%]" />
+                <col className="w-11" />
+                <col className="w-10" />
+                <col className="w-10" />
+                <col className="w-11" />
+                <col className="w-11" />
+                <col className="w-11" />
+                <col className="w-11" />
+                <col className="w-11" />
+                <col className="w-[27%]" />
+              </colgroup>
               <thead className="sticky top-0 z-10 bg-gradient-to-r from-orange-50 to-rose-50 dark:from-stone-950 dark:to-stone-900">
                 <tr>
                   <HeaderCell>Status</HeaderCell>
@@ -612,11 +626,11 @@ function HopRow({ hop }: { hop: HopSample }) {
       <td className="whitespace-nowrap px-1.5 py-1">
         <span className={`inline-block h-1.5 w-1.5 rounded-full ${statusColors[hop.status]}`} />
       </td>
-      <td className="whitespace-nowrap px-1.5 py-1.5 text-[12px] font-semibold text-stone-900 dark:text-stone-100">
+      <td className="whitespace-nowrap px-1 py-1.5 text-[12px] font-semibold text-stone-900 dark:text-stone-100">
         {hop.index}
       </td>
-      <td className="px-1.5 py-1">
-        <div className="min-w-[180px] text-[12px]">
+      <td className="px-1 py-1">
+        <div className="text-[12px]">
           <div className="truncate font-medium text-stone-900 dark:text-stone-100">
             {hostDisplay}
           </div>
@@ -627,37 +641,37 @@ function HopRow({ hop }: { hop: HopSample }) {
           )}
         </div>
       </td>
-      <td className="whitespace-nowrap px-1.5 py-1.5 text-right text-[12px] tabular-nums">
+      <td className="whitespace-nowrap px-1 py-1.5 text-right text-[11px] tabular-nums">
         <span className={hop.stats.lossPercent > 5 ? 'font-semibold text-rose-600 dark:text-rose-400' : ''}>
           {hop.stats.lossPercent.toFixed(1)}%
         </span>
       </td>
-      <td className="whitespace-nowrap px-1.5 py-1.5 text-right text-[12px] tabular-nums text-stone-600 dark:text-stone-400">
+      <td className="whitespace-nowrap px-1 py-1.5 text-right text-[11px] tabular-nums text-stone-600 dark:text-stone-400">
         {hop.stats.sent}
       </td>
-      <td className="whitespace-nowrap px-1.5 py-1.5 text-right text-[12px] tabular-nums text-stone-600 dark:text-stone-400">
+      <td className="whitespace-nowrap px-1 py-1.5 text-right text-[11px] tabular-nums text-stone-600 dark:text-stone-400">
         {hop.stats.received}
       </td>
-      <td className="whitespace-nowrap px-1.5 py-1.5 text-right text-[12px] tabular-nums text-stone-600 dark:text-stone-400">
+      <td className="whitespace-nowrap px-1 py-1.5 text-right text-[11px] tabular-nums text-stone-600 dark:text-stone-400">
         {formatMs(hop.stats.bestMs)}
       </td>
-      <td className="whitespace-nowrap px-1.5 py-1.5 text-right text-[12px] tabular-nums">
+      <td className="whitespace-nowrap px-1 py-1.5 text-right text-[11px] tabular-nums">
         <span className={hop.stats.avgMs && hop.stats.avgMs > 100 ? 'text-orange-600 dark:text-orange-400' : ''}>
           {formatMs(hop.stats.avgMs)}
         </span>
       </td>
-      <td className="whitespace-nowrap px-1.5 py-1.5 text-right text-[12px] tabular-nums text-stone-600 dark:text-stone-400">
+      <td className="whitespace-nowrap px-1 py-1.5 text-right text-[11px] tabular-nums text-stone-600 dark:text-stone-400">
         {formatMs(hop.stats.worstMs)}
       </td>
-      <td className="whitespace-nowrap px-1.5 py-1.5 text-right text-[12px] tabular-nums text-stone-600 dark:text-stone-400">
+      <td className="whitespace-nowrap px-1 py-1.5 text-right text-[11px] tabular-nums text-stone-600 dark:text-stone-400">
         {formatMs(hop.stats.lastMs)}
       </td>
-      <td className="whitespace-nowrap px-1.5 py-1.5 text-right text-[12px] tabular-nums">
+      <td className="whitespace-nowrap px-1 py-1.5 text-right text-[11px] tabular-nums">
         <span className={hop.stats.jitterMs && hop.stats.jitterMs > 30 ? 'text-orange-600 dark:text-orange-400' : ''}>
           {formatMs(hop.stats.jitterMs)}
         </span>
       </td>
-      <td className="max-w-[260px] px-1.5 py-1.5 text-[12px]">
+      <td className="px-1.5 py-1.5 text-[12px]">
         {hop.interpretation && (
           <div className="space-y-0.5">
             <div className="font-medium text-stone-900 dark:text-stone-100">

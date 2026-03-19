@@ -313,7 +313,6 @@ fn discover_windows_route(
 
     let mut child = hidden_command("tracert");
     child
-        .arg("-d")
         .arg("-h")
         .arg(max_hops.to_string())
         .arg("-w")
@@ -361,7 +360,7 @@ fn discover_windows_route(
                         guard.insert(ip)
                     };
 
-                    if should_resolve {
+                    if should_resolve && hop.hostname.is_none() {
                         resolve_hop_hostname_async(
                             session_id.to_string(),
                             hop.index,
@@ -397,7 +396,7 @@ fn resolve_hop_hostname_async(
     event_tx: mpsc::Sender<TraceEvent>,
 ) {
     thread::spawn(move || {
-        let Ok(hostname) = dns_lookup::lookup_addr(&ip) else {
+        let Some(hostname) = resolve_windows_hostname(ip) else {
             return;
         };
 
@@ -406,6 +405,10 @@ fn resolve_hop_hostname_async(
             let Some(hop) = hops.iter_mut().find(|hop| hop.index == hop_index) else {
                 return;
             };
+
+            if hop.hostname.is_some() {
+                return;
+            }
 
             hop.hostname = Some(hostname);
             hop.clone()
@@ -432,19 +435,182 @@ fn parse_windows_route_line(line: &str) -> Option<HopSample> {
     let parts: Vec<&str> = trimmed.split_whitespace().collect();
     let hop_index = parts.first()?.parse::<u8>().ok()?;
     let mut hop = HopSample::new(hop_index);
+    let mut cursor = 1;
+    let mut probes_seen = 0;
 
-    for token in parts.iter().skip(1) {
-        let clean = token.trim_matches(|c| matches!(c, '[' | ']' | '(' | ')'));
+    while cursor < parts.len() && probes_seen < 3 {
+        let token = parts[cursor];
+
+        if token == "*" {
+            cursor += 1;
+            probes_seen += 1;
+            continue;
+        }
+
+        if is_windows_latency_token(token) {
+            cursor += 1;
+            if cursor < parts.len() && parts[cursor].eq_ignore_ascii_case("ms") {
+                cursor += 1;
+            }
+            probes_seen += 1;
+            continue;
+        }
+
+        break;
+    }
+
+    let remainder = &parts[cursor..];
+    if remainder.is_empty() {
+        return Some(hop);
+    }
+
+    if remainder
+        .join(" ")
+        .eq_ignore_ascii_case("Request timed out.")
+    {
+        return Some(hop);
+    }
+
+    let mut hostname_parts = Vec::new();
+
+    for token in remainder {
+        let clean = token.trim_matches(|c| matches!(c, '[' | ']' | '(' | ')' | ','));
+        if clean.is_empty() || is_windows_noise_token(clean) {
+            continue;
+        }
+
         if let Ok(ip) = clean.parse::<IpAddr>() {
             hop.ip = Some(ip);
-        } else if !matches!(clean, "*" | "ms" | "Request" | "timed" | "out.")
-            && hop.hostname.is_none()
-        {
-            hop.hostname = Some(clean.to_string());
+            continue;
         }
+
+        hostname_parts.push(clean);
+    }
+
+    if !hostname_parts.is_empty() {
+        hop.hostname = normalize_hostname(&hostname_parts.join(" "));
     }
 
     Some(hop)
+}
+
+#[cfg(windows)]
+fn is_windows_latency_token(token: &str) -> bool {
+    let trimmed = token.trim();
+    let numeric = trimmed
+        .trim_start_matches('<')
+        .trim_end_matches("ms")
+        .trim();
+
+    !numeric.is_empty() && numeric.parse::<f64>().is_ok()
+}
+
+#[cfg(windows)]
+fn is_windows_noise_token(token: &str) -> bool {
+    matches!(
+        token,
+        "*" | "ms" | "Request" | "timed" | "out." | "Destination" | "host" | "unreachable."
+    )
+}
+
+#[cfg(windows)]
+fn normalize_hostname(candidate: &str) -> Option<String> {
+    let trimmed = candidate.trim().trim_matches('.');
+    if trimmed.is_empty() || trimmed.parse::<IpAddr>().is_ok() {
+        return None;
+    }
+
+    if trimmed.contains(char::is_whitespace) {
+        return None;
+    }
+
+    if !trimmed
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-' | '_' | ':'))
+    {
+        return None;
+    }
+
+    if !trimmed.chars().any(|ch| ch.is_ascii_alphabetic()) {
+        return None;
+    }
+
+    Some(trimmed.to_string())
+}
+
+#[cfg(windows)]
+fn resolve_windows_hostname(ip: IpAddr) -> Option<String> {
+    dns_lookup::lookup_addr(&ip)
+        .ok()
+        .and_then(|hostname| normalize_hostname(&hostname))
+        .or_else(|| resolve_hostname_with_ping(ip))
+        .or_else(|| resolve_hostname_with_nslookup(ip))
+}
+
+#[cfg(windows)]
+fn resolve_hostname_with_ping(ip: IpAddr) -> Option<String> {
+    let output = hidden_command("ping")
+        .arg("-a")
+        .arg("-n")
+        .arg("1")
+        .arg("-w")
+        .arg("250")
+        .arg(ip.to_string())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+
+    parse_ping_hostname(&String::from_utf8_lossy(&output.stdout), ip)
+}
+
+#[cfg(windows)]
+fn parse_ping_hostname(output: &str, ip: IpAddr) -> Option<String> {
+    for raw_line in output.lines() {
+        let line = raw_line.trim();
+        let Some(rest) = line.strip_prefix("Pinging ") else {
+            continue;
+        };
+
+        let ip_marker = format!("[{}]", ip);
+        let hostname = rest.split(&ip_marker).next()?.trim();
+        return normalize_hostname(hostname);
+    }
+
+    None
+}
+
+#[cfg(windows)]
+fn resolve_hostname_with_nslookup(ip: IpAddr) -> Option<String> {
+    let output = hidden_command("nslookup")
+        .arg(ip.to_string())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+
+    parse_nslookup_hostname(&String::from_utf8_lossy(&output.stdout))
+}
+
+#[cfg(windows)]
+fn parse_nslookup_hostname(output: &str) -> Option<String> {
+    for raw_line in output.lines() {
+        let line = raw_line.trim();
+
+        if let Some(hostname) = line.strip_prefix("Name:") {
+            if let Some(normalized) = normalize_hostname(hostname.trim()) {
+                return Some(normalized);
+            }
+        }
+
+        if let Some((_, hostname)) = line.split_once("name =") {
+            if let Some(normalized) = normalize_hostname(hostname.trim()) {
+                return Some(normalized);
+            }
+        }
+    }
+
+    None
 }
 
 #[cfg(windows)]
