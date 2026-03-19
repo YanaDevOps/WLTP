@@ -16,9 +16,9 @@ import {
   type TraceEvent,
   type TraceSession,
 } from './lib/tauri';
+import appIcon from './assets/app-icon.svg';
 
 type View = 'main' | 'settings';
-const APP_ICON = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAABQUlEQVR4nMXOiypDARwH4P/TjmEMYxi72e1s5+yc3Wezu81ml4hERCQiEhGRiEhe4qfzFL8n+D6xuP9gcf9iyPODYe83rL4vWH2fGPF/YHT5HWOBN9iCr7AFXzAeesZE+An2yCPskQdMKveYit5hOnYLh3oDh3qNGe0Ks/FLOPULOPVzzBlnmE+cYiF5AlfqGK7UERbTh1jKHMCd3YcwcU9uD8LEPbldCBP35ncgTNy3sm0GeLi/sAVh4v7CJoSJLxcHECYeWO1DmHiw1DUDPDxU7kCYeKjchjDxcKUFYeKRatMM8HCl1oAwcaVWhzDxaL0KYeKxRgXCxNW1khng4VqzCGHiWrMAYeLxVh7CxPX1nBng4UY7A2HiRjsNYeKJThLCxJMbBoSJp7q6GeDh6Z4GYeLpngph4pl+FMLEswMF/+4KLubDRNx0AAAAAElFTkSuQmCC';
 
 function App() {
   const [view, setView] = useState<View>('main');
@@ -251,7 +251,7 @@ function App() {
           <div className="flex h-11 items-center justify-between px-2.5 sm:px-3">
             <div className="flex items-center gap-2">
               <img
-                src={APP_ICON}
+                src={appIcon}
                 alt="WLTP"
                 className="h-6 w-6 rounded-[7px] shadow-sm shadow-stone-900/10"
               />
