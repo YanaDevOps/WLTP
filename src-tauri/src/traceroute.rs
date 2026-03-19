@@ -187,6 +187,7 @@ impl TraceRunner {
                     (hop.index, hop.stats.clone(), probe_result)
                 };
 
+                merge_resolved_hostnames(&mut hops, &self.hops);
                 sync_hops(&self.hops, &hops);
 
                 match probe_result {
@@ -225,6 +226,7 @@ impl TraceRunner {
             }
         }
 
+        merge_resolved_hostnames(&mut hops, &self.hops);
         sync_hops(&self.hops, &hops);
         Ok(())
     }
@@ -265,6 +267,28 @@ impl TraceRunner {
 
 fn sync_hops(target: &Arc<Mutex<Vec<HopSample>>>, hops: &[HopSample]) {
     *target.lock().unwrap() = hops.to_vec();
+}
+
+fn merge_resolved_hostnames(
+    target_hops: &mut [HopSample],
+    shared_hops: &Arc<Mutex<Vec<HopSample>>>,
+) {
+    let resolved_hops = shared_hops.lock().unwrap().clone();
+
+    for hop in target_hops.iter_mut() {
+        if let Some(shared_hop) = resolved_hops
+            .iter()
+            .find(|candidate| candidate.index == hop.index)
+        {
+            if let Some(hostname) = &shared_hop.hostname {
+                hop.hostname = Some(hostname.clone());
+            }
+
+            if hop.ip.is_none() {
+                hop.ip = shared_hop.ip;
+            }
+        }
+    }
 }
 
 #[cfg(windows)]
