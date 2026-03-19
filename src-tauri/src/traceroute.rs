@@ -5,10 +5,12 @@
 //! with live event updates. macOS keeps a simpler fallback path for now.
 
 use crate::types::*;
+use std::collections::HashSet;
 use std::net::IpAddr;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::thread;
 use tokio::sync::mpsc;
 use tokio::time::{sleep, Duration};
 use tracing::info;
@@ -283,6 +285,7 @@ fn discover_windows_route(
     event_tx: mpsc::Sender<TraceEvent>,
 ) -> TraceResult<Vec<HopSample>> {
     info!("Discovering route to {}", target);
+    let resolved_ips = Arc::new(Mutex::new(HashSet::<IpAddr>::new()));
 
     let mut child = hidden_command("tracert");
     child
@@ -325,8 +328,25 @@ fn discover_windows_route(
                 sync_hops(&hops_handle, &hops);
                 let _ = event_tx.blocking_send(TraceEvent::HopDiscovered {
                     session_id: session_id.to_string(),
-                    hop,
+                    hop: hop.clone(),
                 });
+
+                if let Some(ip) = hop.ip {
+                    let should_resolve = {
+                        let mut guard = resolved_ips.lock().unwrap();
+                        guard.insert(ip)
+                    };
+
+                    if should_resolve {
+                        resolve_hop_hostname_async(
+                            session_id.to_string(),
+                            hop.index,
+                            ip,
+                            hops_handle.clone(),
+                            event_tx.clone(),
+                        );
+                    }
+                }
             }
         }
     }
@@ -342,6 +362,36 @@ fn discover_windows_route(
     }
 
     Ok(hops)
+}
+
+#[cfg(windows)]
+fn resolve_hop_hostname_async(
+    session_id: String,
+    hop_index: u8,
+    ip: IpAddr,
+    hops_handle: Arc<Mutex<Vec<HopSample>>>,
+    event_tx: mpsc::Sender<TraceEvent>,
+) {
+    thread::spawn(move || {
+        let Ok(hostname) = dns_lookup::lookup_addr(&ip) else {
+            return;
+        };
+
+        let updated_hop = {
+            let mut hops = hops_handle.lock().unwrap();
+            let Some(hop) = hops.iter_mut().find(|hop| hop.index == hop_index) else {
+                return;
+            };
+
+            hop.hostname = Some(hostname);
+            hop.clone()
+        };
+
+        let _ = event_tx.blocking_send(TraceEvent::HopDiscovered {
+            session_id,
+            hop: updated_hop,
+        });
+    });
 }
 
 #[cfg(windows)]
