@@ -414,7 +414,23 @@ function MainView({
         </div>
       </section>
 
-      {summary && <SummaryCard summary={summary} />}
+      {!isRunning && summary && <SummaryCard summary={summary} />}
+
+      {isRunning && (
+        <section className="shrink-0 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-blue-900 shadow-sm dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold">Trace in progress</h2>
+              <p className="text-xs opacity-80">
+                Final diagnosis appears after the route settles or when you stop the trace.
+              </p>
+            </div>
+            <div className="text-xs font-medium opacity-80">
+              {hops.length > 0 ? `${hops.length} hops discovered` : 'Discovering hops'}
+            </div>
+          </div>
+        </section>
+      )}
 
       {hops.length > 0 && (
         <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
