@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   startTrace,
   stopTrace,
+  getSessionHops,
   onTraceEvent,
   exportHtml,
   exportJson,
@@ -105,6 +106,35 @@ function App() {
       if (unlisten) unlisten();
     };
   }, []);
+
+  useEffect(() => {
+    if (!session || !isRunning) {
+      return;
+    }
+
+    let disposed = false;
+
+    const pollHops = async () => {
+      try {
+        const currentHops = await getSessionHops(session.id);
+        if (!disposed) {
+          setHops(currentHops);
+        }
+      } catch {
+        if (!disposed) {
+          setIsRunning(false);
+        }
+      }
+    };
+
+    pollHops();
+    const intervalId = window.setInterval(pollHops, 1000);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+    };
+  }, [isRunning, session]);
 
   const handleStartTrace = useCallback(async () => {
     if (!target.trim()) {
@@ -410,6 +440,15 @@ function MainView({
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {isRunning && hops.length === 0 && !error && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <h2 className="text-lg font-semibold mb-2">Trace is running</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Discovering route and waiting for the first hop responses.
+          </p>
         </div>
       )}
 
