@@ -450,7 +450,7 @@ function MainView({
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             <table className="w-full table-auto divide-y divide-orange-100 dark:divide-stone-800">
               <colgroup>
                 <col className="w-6" />
