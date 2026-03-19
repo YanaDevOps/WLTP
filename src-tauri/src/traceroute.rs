@@ -16,8 +16,6 @@ use tokio::time::{sleep, Duration};
 use tracing::info;
 
 #[cfg(windows)]
-use std::io::{BufRead, BufReader};
-#[cfg(windows)]
 use std::os::windows::process::CommandExt;
 
 #[cfg(windows)]
@@ -133,7 +131,7 @@ impl TraceRunner {
     #[cfg(windows)]
     async fn run_windows(&mut self, event_tx: mpsc::Sender<TraceEvent>) -> TraceResult<()> {
         let session_id = self.session_id.clone();
-        let target = self.config.target.clone();
+        let target_ip = self.target_ip;
         let max_hops = self.config.max_hops;
         let timeout_ms = self.config.timeout_ms;
         let running = self.running.clone();
@@ -143,7 +141,7 @@ impl TraceRunner {
         let discovered_hops = tokio::task::spawn_blocking(move || {
             discover_windows_route(
                 &session_id,
-                &target,
+                target_ip,
                 max_hops,
                 timeout_ms,
                 running,
@@ -301,91 +299,150 @@ fn hidden_command(program: &str) -> Command {
 #[cfg(windows)]
 fn discover_windows_route(
     session_id: &str,
-    target: &str,
+    target_ip: IpAddr,
     max_hops: u8,
     timeout_ms: u64,
     running: Arc<AtomicBool>,
     hops_handle: Arc<Mutex<Vec<HopSample>>>,
     event_tx: mpsc::Sender<TraceEvent>,
 ) -> TraceResult<Vec<HopSample>> {
-    info!("Discovering route to {}", target);
+    info!("Discovering route to {}", target_ip);
     let resolved_ips = Arc::new(Mutex::new(HashSet::<IpAddr>::new()));
-
-    let mut child = hidden_command("tracert");
-    child
-        .arg("-d")
-        .arg("-h")
-        .arg(max_hops.to_string())
-        .arg("-w")
-        .arg(timeout_ms.to_string())
-        .arg(target)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    let mut child = child
-        .spawn()
-        .map_err(|e| TraceError::Socket(format!("Failed to start tracert: {}", e)))?;
-
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| TraceError::Internal("Failed to capture tracert stdout".to_string()))?;
-
-    let reader = BufReader::new(stdout);
     let mut hops = Vec::new();
+    let session_id = session_id.to_string();
 
-    for line in reader.lines() {
-        let line =
-            line.map_err(|e| TraceError::Socket(format!("Failed to read tracert output: {}", e)))?;
-
+    for ttl in 1..=max_hops {
         if !running.load(Ordering::Relaxed) {
-            let _ = child.kill();
             break;
         }
 
-        if let Some(hop) = parse_windows_route_line(&line) {
-            let is_new = hops
-                .iter()
-                .all(|existing: &HopSample| existing.index != hop.index);
-            if is_new {
-                hops.push(hop.clone());
-                sync_hops(&hops_handle, &hops);
-                let _ = event_tx.blocking_send(TraceEvent::HopDiscovered {
-                    session_id: session_id.to_string(),
-                    hop: hop.clone(),
-                });
+        let probe_result = probe_windows_route_hop(target_ip, ttl, timeout_ms)?;
+        let mut hop = HopSample::new(ttl);
+        let mut reached_destination = false;
 
-                if let Some(ip) = hop.ip {
-                    let should_resolve = {
-                        let mut guard = resolved_ips.lock().unwrap();
-                        guard.insert(ip)
-                    };
+        match probe_result {
+            RouteProbeResult::Destination { latency_ms } => {
+                hop.ip = Some(target_ip);
+                if let Some(latency_ms) = latency_ms {
+                    hop.stats.add_sample(latency_ms);
+                    hop.status = Severity::Ok;
+                }
+                reached_destination = true;
+            }
+            RouteProbeResult::Intermediate { ip } => {
+                hop.ip = Some(ip);
+            }
+            RouteProbeResult::Timeout => {
+                hop.stats.add_timeout();
+            }
+        }
 
-                    if should_resolve && hop.hostname.is_none() {
-                        resolve_hop_hostname_async(
-                            session_id.to_string(),
-                            hop.index,
-                            ip,
-                            hops_handle.clone(),
-                            event_tx.clone(),
-                        );
-                    }
+        hops.push(hop);
+        merge_resolved_hostnames(&mut hops, &hops_handle);
+        sync_hops(&hops_handle, &hops);
+
+        if let Some(emitted_hop) = hops.last().cloned() {
+            let _ = event_tx.blocking_send(TraceEvent::HopDiscovered {
+                session_id: session_id.clone(),
+                hop: emitted_hop.clone(),
+            });
+
+            if let Some(ip) = emitted_hop.ip {
+                let should_resolve = {
+                    let mut guard = resolved_ips.lock().unwrap();
+                    guard.insert(ip)
+                };
+
+                if should_resolve && emitted_hop.hostname.is_none() {
+                    resolve_hop_hostname_async(
+                        session_id.clone(),
+                        emitted_hop.index,
+                        ip,
+                        hops_handle.clone(),
+                        event_tx.clone(),
+                    );
                 }
             }
         }
+
+        if reached_destination {
+            break;
+        }
     }
 
-    let status = child
-        .wait()
-        .map_err(|e| TraceError::Socket(format!("Failed to wait for tracert: {}", e)))?;
-
-    if !status.success() && hops.is_empty() && running.load(Ordering::Relaxed) {
+    if hops.is_empty() && running.load(Ordering::Relaxed) {
         return Err(TraceError::Internal(
-            "tracert did not return any usable hop information".to_string(),
+            "fast route discovery did not return any usable hop information".to_string(),
         ));
     }
 
     Ok(hops)
+}
+
+#[cfg(windows)]
+enum RouteProbeResult {
+    Destination { latency_ms: Option<f64> },
+    Intermediate { ip: IpAddr },
+    Timeout,
+}
+
+#[cfg(windows)]
+fn probe_windows_route_hop(
+    target_ip: IpAddr,
+    ttl: u8,
+    timeout_ms: u64,
+) -> TraceResult<RouteProbeResult> {
+    let mut command = hidden_command("ping");
+    command
+        .arg("-n")
+        .arg("1")
+        .arg("-i")
+        .arg(ttl.to_string())
+        .arg("-w")
+        .arg(timeout_ms.to_string())
+        .arg(target_ip.to_string())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    let output = command
+        .output()
+        .map_err(|e| TraceError::Socket(format!("Failed to run discovery ping: {}", e)))?;
+
+    Ok(parse_windows_route_probe(
+        &String::from_utf8_lossy(&output.stdout),
+        target_ip,
+    ))
+}
+
+#[cfg(windows)]
+fn parse_windows_route_probe(output: &str, target_ip: IpAddr) -> RouteProbeResult {
+    if let Some(latency_ms) = parse_windows_ping_latency(output) {
+        return RouteProbeResult::Destination {
+            latency_ms: Some(latency_ms),
+        };
+    }
+
+    if let Some(ip) = extract_route_probe_ip(output, target_ip) {
+        return RouteProbeResult::Intermediate { ip };
+    }
+
+    RouteProbeResult::Timeout
+}
+
+#[cfg(windows)]
+fn extract_route_probe_ip(output: &str, target_ip: IpAddr) -> Option<IpAddr> {
+    let mut seen = HashSet::new();
+
+    for token in output.split_whitespace() {
+        let clean = token.trim_matches(|c| matches!(c, '[' | ']' | '(' | ')' | ',' | ';' | ':'));
+        if let Ok(ip) = clean.parse::<IpAddr>() {
+            if ip != target_ip && seen.insert(ip) {
+                return Some(ip);
+            }
+        }
+    }
+
+    None
 }
 
 #[cfg(windows)]
@@ -420,90 +477,6 @@ fn resolve_hop_hostname_async(
             hop: updated_hop,
         });
     });
-}
-
-#[cfg(windows)]
-fn parse_windows_route_line(line: &str) -> Option<HopSample> {
-    let trimmed = line.trim();
-    if trimmed.is_empty()
-        || trimmed.starts_with("Tracing route")
-        || trimmed.starts_with("over a maximum")
-        || trimmed.starts_with("Trace complete")
-    {
-        return None;
-    }
-
-    let parts: Vec<&str> = trimmed.split_whitespace().collect();
-    let hop_index = parts.first()?.parse::<u8>().ok()?;
-    let mut hop = HopSample::new(hop_index);
-    let mut cursor = 1;
-    let mut probes_seen = 0;
-
-    while cursor < parts.len() && probes_seen < 3 {
-        let token = parts[cursor];
-
-        if token == "*" {
-            cursor += 1;
-            probes_seen += 1;
-            continue;
-        }
-
-        if is_windows_latency_token(token) {
-            cursor += 1;
-            if cursor < parts.len() && parts[cursor].eq_ignore_ascii_case("ms") {
-                cursor += 1;
-            }
-            probes_seen += 1;
-            continue;
-        }
-
-        break;
-    }
-
-    let remainder = &parts[cursor..];
-    if remainder.is_empty() {
-        return Some(hop);
-    }
-
-    if remainder
-        .join(" ")
-        .eq_ignore_ascii_case("Request timed out.")
-    {
-        return Some(hop);
-    }
-
-    for token in remainder {
-        let clean = token.trim_matches(|c| matches!(c, '[' | ']' | '(' | ')' | ','));
-        if clean.is_empty() || is_windows_noise_token(clean) {
-            continue;
-        }
-
-        if let Ok(ip) = clean.parse::<IpAddr>() {
-            hop.ip = Some(ip);
-            break;
-        }
-    }
-
-    Some(hop)
-}
-
-#[cfg(windows)]
-fn is_windows_latency_token(token: &str) -> bool {
-    let trimmed = token.trim();
-    let numeric = trimmed
-        .trim_start_matches('<')
-        .trim_end_matches("ms")
-        .trim();
-
-    !numeric.is_empty() && numeric.parse::<f64>().is_ok()
-}
-
-#[cfg(windows)]
-fn is_windows_noise_token(token: &str) -> bool {
-    matches!(
-        token,
-        "*" | "ms" | "Request" | "timed" | "out." | "Destination" | "host" | "unreachable."
-    )
 }
 
 #[cfg(windows)]

@@ -455,7 +455,7 @@ function MainView({
               <colgroup>
                 <col className="w-6" />
                 <col className="w-8" />
-                <col className="w-[17%]" />
+                <col className="w-[15%]" />
                 <col className="w-11" />
                 <col className="w-10" />
                 <col className="w-10" />
@@ -463,23 +463,23 @@ function MainView({
                 <col className="w-11" />
                 <col className="w-11" />
                 <col className="w-11" />
-                <col className="w-11" />
-                <col className="w-[27%]" />
+                <col className="w-12" />
+                <col className="w-[30%]" />
               </colgroup>
               <thead className="sticky top-0 z-10 bg-gradient-to-r from-orange-50 to-rose-50 dark:from-stone-950 dark:to-stone-900">
                 <tr>
                   <HeaderCell>Status</HeaderCell>
                   <HeaderCell>Hop</HeaderCell>
-                  <HeaderCell>Host</HeaderCell>
-                  <HeaderCell align="right">Loss%</HeaderCell>
+                  <HeaderCell className="pr-1" >Host</HeaderCell>
+                  <HeaderCell align="right" className="pl-1">Loss%</HeaderCell>
                   <HeaderCell align="right">Sent</HeaderCell>
                   <HeaderCell align="right">Recv</HeaderCell>
                   <HeaderCell align="right">Best</HeaderCell>
                   <HeaderCell align="right">Avg</HeaderCell>
                   <HeaderCell align="right">Worst</HeaderCell>
                   <HeaderCell align="right">Last</HeaderCell>
-                  <HeaderCell align="right">Jitter</HeaderCell>
-                  <HeaderCell>Interpretation</HeaderCell>
+                  <HeaderCell align="right" className="pr-2">Jitter</HeaderCell>
+                  <HeaderCell className="pl-3">Interpretation</HeaderCell>
                 </tr>
               </thead>
 
@@ -531,13 +531,15 @@ function MainView({
 function HeaderCell({
   children,
   align = 'left',
+  className = '',
 }: {
   children: ReactNode;
   align?: 'left' | 'right';
+  className?: string;
 }) {
   return (
     <th
-      className={`px-1.5 py-1.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-stone-500 dark:text-stone-400 ${
+      className={`px-1.5 py-1.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-stone-500 dark:text-stone-400 ${className} ${
         align === 'right' ? 'text-right' : 'text-left'
       }`}
     >
@@ -629,7 +631,7 @@ function HopRow({ hop }: { hop: HopSample }) {
       <td className="whitespace-nowrap px-1 py-1.5 text-[12px] font-semibold text-stone-900 dark:text-stone-100">
         {hop.index}
       </td>
-      <td className="px-1 py-1">
+      <td className="px-1 pr-0.5 py-1">
         <div className="text-[12px]">
           <div className="truncate font-medium text-stone-900 dark:text-stone-100">
             {hostDisplay}
@@ -641,7 +643,7 @@ function HopRow({ hop }: { hop: HopSample }) {
           )}
         </div>
       </td>
-      <td className="whitespace-nowrap px-1 py-1.5 text-right text-[11px] tabular-nums">
+      <td className="whitespace-nowrap px-1 py-1.5 pl-0.5 text-right text-[11px] tabular-nums">
         <span className={hop.stats.lossPercent > 5 ? 'font-semibold text-rose-600 dark:text-rose-400' : ''}>
           {hop.stats.lossPercent.toFixed(1)}%
         </span>
@@ -666,12 +668,12 @@ function HopRow({ hop }: { hop: HopSample }) {
       <td className="whitespace-nowrap px-1 py-1.5 text-right text-[11px] tabular-nums text-stone-600 dark:text-stone-400">
         {formatMs(hop.stats.lastMs)}
       </td>
-      <td className="whitespace-nowrap px-1 py-1.5 text-right text-[11px] tabular-nums">
+      <td className="whitespace-nowrap px-1 py-1.5 pr-2 text-right text-[11px] tabular-nums">
         <span className={hop.stats.jitterMs && hop.stats.jitterMs > 30 ? 'text-orange-600 dark:text-orange-400' : ''}>
           {formatMs(hop.stats.jitterMs)}
         </span>
       </td>
-      <td className="px-1.5 py-1.5 text-[12px]">
+      <td className="px-1.5 py-1.5 pl-3 text-[12px]">
         {hop.interpretation && (
           <div className="space-y-0.5">
             <div className="font-medium text-stone-900 dark:text-stone-100">
