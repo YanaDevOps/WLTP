@@ -313,6 +313,7 @@ fn discover_windows_route(
 
     let mut child = hidden_command("tracert");
     child
+        .arg("-d")
         .arg("-h")
         .arg(max_hops.to_string())
         .arg("-w")
@@ -471,8 +472,6 @@ fn parse_windows_route_line(line: &str) -> Option<HopSample> {
         return Some(hop);
     }
 
-    let mut hostname_parts = Vec::new();
-
     for token in remainder {
         let clean = token.trim_matches(|c| matches!(c, '[' | ']' | '(' | ')' | ','));
         if clean.is_empty() || is_windows_noise_token(clean) {
@@ -481,14 +480,8 @@ fn parse_windows_route_line(line: &str) -> Option<HopSample> {
 
         if let Ok(ip) = clean.parse::<IpAddr>() {
             hop.ip = Some(ip);
-            continue;
+            break;
         }
-
-        hostname_parts.push(clean);
-    }
-
-    if !hostname_parts.is_empty() {
-        hop.hostname = normalize_hostname(&hostname_parts.join(" "));
     }
 
     Some(hop)
