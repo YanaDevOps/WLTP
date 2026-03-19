@@ -150,8 +150,12 @@ async fn run_trace_task(
 
     let engine = &state.engine;
     let settings = state.settings.read().await.clone();
-    let hops_with_interpretation = engine.annotate_hops(&hops, settings.explanation_level);
-    let summary = engine.generate_summary(&hops_with_interpretation);
+    let hops_with_interpretation = engine.annotate_hops(
+        &hops,
+        settings.explanation_level.clone(),
+        settings.language.clone(),
+    );
+    let summary = engine.generate_summary(&hops_with_interpretation, settings.language.clone());
 
     {
         let mut sessions = state.sessions.write().await;
@@ -216,9 +220,11 @@ pub async fn get_session_hops(
 
     if let Some(hops) = raw_hops {
         let settings = state.settings.read().await.clone();
-        return Ok(state
-            .engine
-            .annotate_hops(&hops, settings.explanation_level));
+        return Ok(state.engine.annotate_hops(
+            &hops,
+            settings.explanation_level,
+            settings.language,
+        ));
     }
 
     Err("Session not found or not running".to_string())
@@ -231,10 +237,13 @@ pub async fn interpret_hops(
     hops: Vec<HopSample>,
 ) -> Result<SessionSummary, String> {
     let settings = state.settings.read().await.clone();
-    let interpreted = state
+    let interpreted =
+        state
+            .engine
+            .annotate_hops(&hops, settings.explanation_level, settings.language.clone());
+    Ok(state
         .engine
-        .annotate_hops(&hops, settings.explanation_level);
-    Ok(state.engine.generate_summary(&interpreted))
+        .generate_summary(&interpreted, settings.language))
 }
 
 /// Export session data as JSON
@@ -534,11 +543,20 @@ pub async fn update_settings(
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
+    #[serde(default = "default_language")]
+    pub language: Language,
     pub theme: Theme,
     pub explanation_level: ExplanationLevel,
     pub default_interval_ms: u64,
     pub default_max_hops: u8,
     pub default_timeout_ms: u64,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Language {
+    En,
+    Ru,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -559,6 +577,7 @@ pub enum ExplanationLevel {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            language: Language::En,
             theme: Theme::System,
             explanation_level: ExplanationLevel::Simple,
             default_interval_ms: 1000,
@@ -568,8 +587,13 @@ impl Default for Settings {
     }
 }
 
+fn default_language() -> Language {
+    Language::En
+}
+
 fn sanitize_settings(settings: Settings) -> Settings {
     Settings {
+        language: settings.language,
         theme: settings.theme,
         explanation_level: settings.explanation_level,
         default_interval_ms: settings.default_interval_ms.clamp(100, 10_000),

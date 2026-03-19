@@ -75,6 +75,7 @@ export interface TraceEvent {
 }
 
 export interface Settings {
+  language: 'en' | 'ru';
   theme: 'system' | 'light' | 'dark';
   explanationLevel: 'simple' | 'detailed';
   defaultIntervalMs: number;

@@ -28,12 +28,14 @@ function App() {
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState<Settings>({
+    language: 'en',
     theme: 'system',
     explanationLevel: 'simple',
     defaultIntervalMs: 1000,
     defaultMaxHops: 30,
     defaultTimeoutMs: 1000,
   });
+  const copy = UI_TEXT[settings.language];
 
   useEffect(() => {
     getSettings().then(setSettings).catch(console.error);
@@ -138,7 +140,7 @@ function App() {
 
   const handleStartTrace = useCallback(async () => {
     if (!target.trim()) {
-      setError('Please enter a target host or IP address');
+      setError(copy.errors.emptyTarget);
       return;
     }
 
@@ -163,7 +165,7 @@ function App() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [settings, target]);
+  }, [copy.errors.emptyTarget, settings, target]);
 
   const handleStopTrace = useCallback(async () => {
     if (!session) {
@@ -253,17 +255,17 @@ function App() {
               <div>
                 <h1 className="text-[13px] font-semibold tracking-[0.08em]">WLTP</h1>
                 <p className="text-[10px] text-stone-500 dark:text-stone-400">
-                  WinMTR-style route diagnostics
+                  {copy.appSubtitle}
                 </p>
               </div>
             </div>
 
             <nav className="flex items-center gap-1.5">
               <NavButton active={view === 'main'} onClick={() => setView('main')}>
-                Diagnose
+                {copy.navDiagnose}
               </NavButton>
               <NavButton active={view === 'settings'} onClick={() => setView('settings')}>
-                Settings
+                {copy.navSettings}
               </NavButton>
             </nav>
           </div>
@@ -283,9 +285,10 @@ function App() {
               onExportHtml={handleExportHtml}
               onExportJson={handleExportJson}
               session={session}
+              copy={copy}
             />
           ) : (
-            <SettingsView settings={settings} onChange={handleSettingsChange} />
+            <SettingsView settings={settings} onChange={handleSettingsChange} copy={copy} />
           )}
         </main>
       </div>
@@ -328,6 +331,7 @@ interface MainViewProps {
   onExportHtml: () => void;
   onExportJson: () => void;
   session: TraceSession | null;
+  copy: UICopy;
 }
 
 function MainView({
@@ -342,6 +346,7 @@ function MainView({
   onExportHtml,
   onExportJson,
   session,
+  copy,
 }: MainViewProps) {
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
@@ -353,14 +358,14 @@ function MainView({
                 htmlFor="target"
                 className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-500 dark:text-stone-400"
               >
-                Target Host or IP
+                {copy.targetLabel}
               </label>
               <input
                 id="target"
                 type="text"
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
-                placeholder="e.g., google.com or 8.8.8.8"
+                placeholder={copy.targetPlaceholder}
                 disabled={isRunning}
                 className="w-full rounded-md border border-orange-200 bg-orange-50/70 px-3 py-1.5 text-[13px] shadow-sm outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 disabled:opacity-50 dark:border-stone-700 dark:bg-stone-900 dark:text-white"
                 onKeyDown={(e) => {
@@ -377,14 +382,14 @@ function MainView({
                   onClick={onStart}
                   className="rounded-md bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 px-3 py-1.5 text-[12px] font-semibold text-white shadow-sm shadow-orange-500/25 transition hover:from-amber-600 hover:via-orange-600 hover:to-rose-600"
                 >
-                  Start Trace
+                  {copy.startTrace}
                 </button>
               ) : (
                 <button
                   onClick={onStop}
                   className="rounded-md bg-gradient-to-r from-rose-500 to-red-500 px-3 py-1.5 text-[12px] font-semibold text-white shadow-sm shadow-rose-500/25 transition hover:from-rose-600 hover:to-red-600"
                 >
-                  Stop
+                  {copy.stopTrace}
                 </button>
               )}
             </div>
@@ -400,28 +405,30 @@ function MainView({
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-stone-600 dark:text-stone-400">
               {session.targetIp && (
                 <span>
-                  Resolved:{' '}
+                  {copy.resolvedLabel}:{' '}
                   <code className="rounded bg-orange-100/80 px-1.5 py-0.5 dark:bg-stone-800">
                     {session.targetIp}
                   </code>
                 </span>
               )}
               {session.startedAt && (
-                <span>Started: {new Date(session.startedAt).toLocaleTimeString()}</span>
+                <span>
+                  {copy.startedLabel}: {new Date(session.startedAt).toLocaleTimeString()}
+                </span>
               )}
             </div>
           )}
         </div>
       </section>
 
-      {!isRunning && summary && <SummaryCard summary={summary} />}
+      {!isRunning && summary && <SummaryCard summary={summary} copy={copy} />}
 
       {isRunning && (
         <section className="shrink-0 rounded-md border border-orange-200/80 bg-gradient-to-r from-amber-50 via-orange-50 to-rose-50 px-2 py-1.5 text-orange-950 shadow-sm shadow-orange-200/30 dark:border-orange-950/80 dark:bg-gradient-to-r dark:from-amber-950/30 dark:via-orange-950/25 dark:to-rose-950/30 dark:text-orange-200">
           <div className="flex items-center gap-2">
-            <h2 className="text-[12px] font-semibold">Trace in progress</h2>
+            <h2 className="text-[12px] font-semibold">{copy.traceInProgressTitle}</h2>
             <p className="text-[11px] opacity-80">
-              Final diagnosis appears after the route settles or when you stop the trace.
+              {copy.traceInProgressHint}
             </p>
           </div>
         </section>
@@ -431,7 +438,7 @@ function MainView({
         <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-orange-200/70 bg-white/82 shadow-sm shadow-orange-200/25 backdrop-blur-sm dark:border-orange-950/70 dark:bg-stone-950/72">
           <div className="flex shrink-0 items-center justify-between gap-2 border-b border-orange-200/70 px-2 py-1 dark:border-orange-950/70">
             <div>
-              <h2 className="text-[12px] font-semibold">Network Route</h2>
+              <h2 className="text-[12px] font-semibold">{copy.networkRoute}</h2>
             </div>
 
             <div className="flex gap-1">
@@ -439,13 +446,13 @@ function MainView({
                 onClick={onExportHtml}
                 className="rounded-md bg-orange-100/80 px-2 py-1 text-[10px] font-semibold text-orange-900 transition hover:bg-orange-200 dark:bg-stone-800 dark:text-orange-200 dark:hover:bg-stone-700"
               >
-                Export HTML
+                {copy.exportHtml}
               </button>
               <button
                 onClick={onExportJson}
                 className="rounded-md bg-orange-100/80 px-2 py-1 text-[10px] font-semibold text-orange-900 transition hover:bg-orange-200 dark:bg-stone-800 dark:text-orange-200 dark:hover:bg-stone-700"
                 >
-                Export JSON
+                {copy.exportJson}
               </button>
             </div>
           </div>
@@ -468,18 +475,18 @@ function MainView({
               </colgroup>
               <thead className="sticky top-0 z-10 bg-gradient-to-r from-orange-50 to-rose-50 dark:from-stone-950 dark:to-stone-900">
                 <tr>
-                  <HeaderCell>Status</HeaderCell>
-                  <HeaderCell>Hop</HeaderCell>
-                  <HeaderCell className="pr-1" >Host</HeaderCell>
-                  <HeaderCell align="right" className="pl-1">Loss%</HeaderCell>
-                  <HeaderCell align="right">Sent</HeaderCell>
-                  <HeaderCell align="right">Recv</HeaderCell>
-                  <HeaderCell align="right">Best</HeaderCell>
-                  <HeaderCell align="right">Avg</HeaderCell>
-                  <HeaderCell align="right">Worst</HeaderCell>
-                  <HeaderCell align="right">Last</HeaderCell>
-                  <HeaderCell align="right" className="pr-2">Jitter</HeaderCell>
-                  <HeaderCell className="pl-3">Interpretation</HeaderCell>
+                  <HeaderCell>{copy.table.status}</HeaderCell>
+                  <HeaderCell>{copy.table.hop}</HeaderCell>
+                  <HeaderCell className="pr-1">{copy.table.host}</HeaderCell>
+                  <HeaderCell align="right" className="pl-1">{copy.table.loss}</HeaderCell>
+                  <HeaderCell align="right">{copy.table.sent}</HeaderCell>
+                  <HeaderCell align="right">{copy.table.received}</HeaderCell>
+                  <HeaderCell align="right">{copy.table.best}</HeaderCell>
+                  <HeaderCell align="right">{copy.table.avg}</HeaderCell>
+                  <HeaderCell align="right">{copy.table.worst}</HeaderCell>
+                  <HeaderCell align="right">{copy.table.last}</HeaderCell>
+                  <HeaderCell align="right" className="pr-2">{copy.table.jitter}</HeaderCell>
+                  <HeaderCell className="pl-3">{copy.table.interpretation}</HeaderCell>
                 </tr>
               </thead>
 
@@ -495,9 +502,9 @@ function MainView({
 
       {isRunning && hops.length === 0 && !error && (
         <section className="rounded-md border border-orange-200/70 bg-white/82 p-2.5 shadow-sm shadow-orange-200/20 dark:border-orange-950/70 dark:bg-stone-950/72">
-          <h2 className="mb-1 text-[12px] font-semibold">Trace is running</h2>
+          <h2 className="mb-1 text-[12px] font-semibold">{copy.traceRunningTitle}</h2>
           <p className="text-[12px] text-stone-600 dark:text-stone-400">
-            Discovering route and waiting for the first hop responses.
+            {copy.traceRunningHint}
           </p>
         </section>
       )}
@@ -516,10 +523,10 @@ function MainView({
               </svg>
             </div>
             <h3 className="mb-1.5 text-[13px] font-semibold text-stone-900 dark:text-stone-100">
-              Ready to Diagnose
+              {copy.emptyStateTitle}
             </h3>
             <p className="mx-auto max-w-md text-[12px] text-stone-600 dark:text-stone-400">
-              Enter a hostname or IP address above and click Start Trace to begin network diagnostics.
+              {copy.emptyStateText}
             </p>
           </div>
         </section>
@@ -548,7 +555,7 @@ function HeaderCell({
   );
 }
 
-function SummaryCard({ summary }: { summary: SessionSummary }) {
+function SummaryCard({ summary, copy }: { summary: SessionSummary; copy: UICopy }) {
   const statusColors: Record<string, string> = {
     ok: 'border-emerald-300 bg-emerald-100/90 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/35 dark:text-emerald-300',
     warning:
@@ -577,7 +584,7 @@ function SummaryCard({ summary }: { summary: SessionSummary }) {
           {summary.secondaryFindings.length > 0 && (
             <div className="mb-3">
               <h3 className="mb-1 text-[10px] font-semibold uppercase tracking-wide opacity-80">
-                Observations
+                {copy.summaryObservations}
               </h3>
               <ul className="list-disc list-inside space-y-0.5 text-[12px]">
                 {summary.secondaryFindings.map((finding, index) => (
@@ -590,7 +597,7 @@ function SummaryCard({ summary }: { summary: SessionSummary }) {
           {summary.recommendedNextSteps.length > 0 && (
             <div>
               <h3 className="mb-1 text-[10px] font-semibold uppercase tracking-wide opacity-80">
-                Recommended Actions
+                {copy.summaryActions}
               </h3>
               <ul className="list-disc list-inside space-y-0.5 text-[12px]">
                 {summary.recommendedNextSteps.map((step, index) => (
@@ -692,29 +699,44 @@ function HopRow({ hop }: { hop: HopSample }) {
 function SettingsView({
   settings,
   onChange,
+  copy,
 }: {
   settings: Settings;
   onChange: (settings: Settings) => void;
+  copy: UICopy;
 }) {
   return (
     <div className="mx-auto h-full w-full max-w-3xl overflow-auto">
       <div className="rounded-md border border-orange-200/70 bg-white/82 p-3 shadow-sm shadow-orange-200/25 dark:border-orange-950/70 dark:bg-stone-950/72">
-        <h2 className="mb-2 text-[13px] font-semibold">Settings</h2>
+        <h2 className="mb-2 text-[13px] font-semibold">{copy.settingsTitle}</h2>
 
         <div className="space-y-2.5">
-          <Field label="Theme">
+          <Field label={copy.settings.languageLabel}>
+            <select
+              value={settings.language}
+              onChange={(e) =>
+                onChange({ ...settings, language: e.target.value as Settings['language'] })
+              }
+              className={inputClassName}
+            >
+              <option value="en">{copy.settings.languageEnglish}</option>
+              <option value="ru">{copy.settings.languageRussian}</option>
+            </select>
+          </Field>
+
+          <Field label={copy.settings.themeLabel}>
             <select
               value={settings.theme}
               onChange={(e) => onChange({ ...settings, theme: e.target.value as Settings['theme'] })}
               className={inputClassName}
             >
-              <option value="system">System</option>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
+              <option value="system">{copy.settings.themeSystem}</option>
+              <option value="light">{copy.settings.themeLight}</option>
+              <option value="dark">{copy.settings.themeDark}</option>
             </select>
           </Field>
 
-          <Field label="Explanation Level">
+          <Field label={copy.settings.explanationLevelLabel}>
             <select
               value={settings.explanationLevel}
               onChange={(e) =>
@@ -725,12 +747,12 @@ function SettingsView({
               }
               className={inputClassName}
             >
-              <option value="simple">Simple (for beginners)</option>
-              <option value="detailed">Detailed (for advanced users)</option>
+              <option value="simple">{copy.settings.explanationSimple}</option>
+              <option value="detailed">{copy.settings.explanationDetailed}</option>
             </select>
           </Field>
 
-          <Field label="Probe Interval (ms)" hint="Time between probes (100-10000 ms)">
+          <Field label={copy.settings.probeIntervalLabel} hint={copy.settings.probeIntervalHint}>
             <input
               type="number"
               min={100}
@@ -746,7 +768,7 @@ function SettingsView({
             />
           </Field>
 
-          <Field label="Maximum Hops" hint="Maximum number of hops to trace (1-64)">
+          <Field label={copy.settings.maximumHopsLabel} hint={copy.settings.maximumHopsHint}>
             <input
               type="number"
               min={1}
@@ -762,7 +784,7 @@ function SettingsView({
             />
           </Field>
 
-          <Field label="Probe Timeout (ms)" hint="Timeout for each probe (100-10000 ms)">
+          <Field label={copy.settings.probeTimeoutLabel} hint={copy.settings.probeTimeoutHint}>
             <input
               type="number"
               min={100}
@@ -813,6 +835,127 @@ function upsertHop(current: HopSample[], nextHop: HopSample): HopSample[] {
   updated[existingIndex] = nextHop;
   return updated;
 }
+
+const UI_TEXT = {
+  en: {
+    appSubtitle: 'WinMTR-style route diagnostics',
+    navDiagnose: 'Diagnose',
+    navSettings: 'Settings',
+    targetLabel: 'Target Host or IP',
+    targetPlaceholder: 'e.g., google.com or 8.8.8.8',
+    startTrace: 'Start Trace',
+    stopTrace: 'Stop',
+    resolvedLabel: 'Resolved',
+    startedLabel: 'Started',
+    traceInProgressTitle: 'Trace in progress',
+    traceInProgressHint: 'Final diagnosis appears after the route settles or when you stop the trace.',
+    networkRoute: 'Network Route',
+    exportHtml: 'Export HTML',
+    exportJson: 'Export JSON',
+    traceRunningTitle: 'Trace is running',
+    traceRunningHint: 'Discovering route and waiting for the first hop responses.',
+    emptyStateTitle: 'Ready to Diagnose',
+    emptyStateText: 'Enter a hostname or IP address above and click Start Trace to begin network diagnostics.',
+    summaryObservations: 'Observations',
+    summaryActions: 'Recommended Actions',
+    settingsTitle: 'Settings',
+    errors: {
+      emptyTarget: 'Please enter a target host or IP address',
+    },
+    table: {
+      status: 'Status',
+      hop: 'Hop',
+      host: 'Host',
+      loss: 'Loss%',
+      sent: 'Sent',
+      received: 'Recv',
+      best: 'Best',
+      avg: 'Avg',
+      worst: 'Worst',
+      last: 'Last',
+      jitter: 'Jitter',
+      interpretation: 'Interpretation',
+    },
+    settings: {
+      languageLabel: 'Language',
+      languageEnglish: 'English',
+      languageRussian: 'Russian',
+      themeLabel: 'Theme',
+      themeSystem: 'System',
+      themeLight: 'Light',
+      themeDark: 'Dark',
+      explanationLevelLabel: 'Explanation Level',
+      explanationSimple: 'Simple (for beginners)',
+      explanationDetailed: 'Detailed (for advanced users)',
+      probeIntervalLabel: 'Probe Interval (ms)',
+      probeIntervalHint: 'Time between probes (100-10000 ms)',
+      maximumHopsLabel: 'Maximum Hops',
+      maximumHopsHint: 'Maximum number of hops to trace (1-64)',
+      probeTimeoutLabel: 'Probe Timeout (ms)',
+      probeTimeoutHint: 'Timeout for each probe (100-10000 ms)',
+    },
+  },
+  ru: {
+    appSubtitle: 'Диагностика маршрута в стиле WinMTR',
+    navDiagnose: 'Диагностика',
+    navSettings: 'Настройки',
+    targetLabel: 'Хост или IP цели',
+    targetPlaceholder: 'например, google.com или 8.8.8.8',
+    startTrace: 'Старт',
+    stopTrace: 'Стоп',
+    resolvedLabel: 'Разрешён',
+    startedLabel: 'Запущено',
+    traceInProgressTitle: 'Трассировка выполняется',
+    traceInProgressHint: 'Итоговый диагноз появится после стабилизации маршрута или после остановки трассировки.',
+    networkRoute: 'Маршрут сети',
+    exportHtml: 'Экспорт HTML',
+    exportJson: 'Экспорт JSON',
+    traceRunningTitle: 'Трассировка выполняется',
+    traceRunningHint: 'Определяем маршрут и ждём первые ответы от хопов.',
+    emptyStateTitle: 'Готово к диагностике',
+    emptyStateText: 'Введите hostname или IP-адрес выше и нажмите «Старт», чтобы начать сетевую диагностику.',
+    summaryObservations: 'Наблюдения',
+    summaryActions: 'Рекомендуемые действия',
+    settingsTitle: 'Настройки',
+    errors: {
+      emptyTarget: 'Введите хост или IP-адрес цели',
+    },
+    table: {
+      status: 'Статус',
+      hop: 'Хоп',
+      host: 'Хост',
+      loss: 'Потери%',
+      sent: 'Отпр',
+      received: 'Получ',
+      best: 'Луч',
+      avg: 'Сред',
+      worst: 'Худш',
+      last: 'Послед',
+      jitter: 'Джитт',
+      interpretation: 'Интерпретация',
+    },
+    settings: {
+      languageLabel: 'Язык',
+      languageEnglish: 'Английский',
+      languageRussian: 'Русский',
+      themeLabel: 'Тема',
+      themeSystem: 'Системная',
+      themeLight: 'Светлая',
+      themeDark: 'Тёмная',
+      explanationLevelLabel: 'Уровень объяснений',
+      explanationSimple: 'Простой (для новичков)',
+      explanationDetailed: 'Подробный (для опытных)',
+      probeIntervalLabel: 'Интервал проб (мс)',
+      probeIntervalHint: 'Время между пробами (100-10000 мс)',
+      maximumHopsLabel: 'Максимум хопов',
+      maximumHopsHint: 'Максимальное количество хопов (1-64)',
+      probeTimeoutLabel: 'Таймаут пробы (мс)',
+      probeTimeoutHint: 'Таймаут для каждой пробы (100-10000 мс)',
+    },
+  },
+} as const;
+
+type UICopy = (typeof UI_TEXT)[keyof typeof UI_TEXT];
 
 const inputClassName =
   'w-full rounded-md border border-orange-200 bg-orange-50/70 px-3 py-1.5 text-[12px] shadow-sm focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 dark:border-stone-700 dark:bg-stone-900 dark:text-white';
