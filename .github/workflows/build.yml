@@ -30,11 +30,82 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+      - name: Generate PNG icons
+        run: npm run generate-icons
+
       - name: Ensure Windows icon exists
         run: npm run generate-ico
 
       - name: Build Tauri app
         run: npx tauri build
+
+      - name: Sign Windows artifacts
+        shell: pwsh
+        env:
+          WINDOWS_SIGNING_CERT_BASE64: ${{ secrets.WINDOWS_SIGNING_CERT_BASE64 }}
+          WINDOWS_SIGNING_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERT_BASE64) -or [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERT_PASSWORD)) {
+            Write-Host "Signing secrets are not configured. Skipping artifact signing."
+            exit 0
+          }
+
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+
+          if (-not $signtool) {
+            throw "signtool.exe was not found on the runner."
+          }
+
+          $certPath = Join-Path $env:RUNNER_TEMP "wltp-signing-cert.pfx"
+          [System.IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_SIGNING_CERT_BASE64))
+
+          try {
+            $targets = @(
+              Get-ChildItem "src-tauri/target/release" -File -Filter *.exe -ErrorAction SilentlyContinue
+              Get-ChildItem "src-tauri/target/release/bundle/nsis" -File -Filter *.exe -ErrorAction SilentlyContinue
+            ) | Sort-Object FullName -Unique
+
+            if (-not $targets) {
+              Write-Host "No executable artifacts were found to sign."
+              exit 0
+            }
+
+            foreach ($target in $targets) {
+              & $signtool.FullName sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /f $certPath /p $env:WINDOWS_SIGNING_CERT_PASSWORD $target.FullName
+              if ($LASTEXITCODE -ne 0) {
+                throw "Signing failed for $($target.FullName)"
+              }
+            }
+          }
+          finally {
+            Remove-Item $certPath -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Verify artifact signatures
+        if: ${{ secrets.WINDOWS_SIGNING_CERT_BASE64 != '' && secrets.WINDOWS_SIGNING_CERT_PASSWORD != '' }}
+        shell: pwsh
+        run: |
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+
+          if (-not $signtool) {
+            throw "signtool.exe was not found on the runner."
+          }
+
+          $targets = @(
+            Get-ChildItem "src-tauri/target/release" -File -Filter *.exe -ErrorAction SilentlyContinue
+            Get-ChildItem "src-tauri/target/release/bundle/nsis" -File -Filter *.exe -ErrorAction SilentlyContinue
+          ) | Sort-Object FullName -Unique
+
+          foreach ($target in $targets) {
+            & $signtool.FullName verify /pa /all $target.FullName
+            if ($LASTEXITCODE -ne 0) {
+              throw "Signature verification failed for $($target.FullName)"
+            }
+          }
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4

@@ -738,7 +738,6 @@ impl InterpretationEngine {
             "Check your local network equipment (router, cables)" => "Проверьте локальное оборудование сети (роутер, кабели)".to_string(),
             "Restart your router/modem" => "Перезагрузите роутер или модем".to_string(),
             "No significant issues detected along the route" => "Существенных проблем по маршруту не обнаружено".to_string(),
-            "No action needed - connection is healthy" => "Действия не требуются — соединение в норме".to_string(),
             "Monitor the connection for changes" => "Наблюдайте за соединением и проверяйте изменения".to_string(),
             "Share this report with technical support if issues persist" => "Передайте этот отчёт в техподдержку, если проблема сохранится".to_string(),
             "Some issues detected" => "Обнаружены некоторые проблемы".to_string(),

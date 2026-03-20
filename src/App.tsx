@@ -246,7 +246,7 @@ function App() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[radial-gradient(circle_at_top,#fde7d7_0%,#f6d4c5_28%,#efe5dd_58%,#e8ddd5_100%)] text-stone-900 dark:bg-[radial-gradient(circle_at_top,#4b2a2a_0%,#2b1d24_35%,#171318_72%,#0f0d12_100%)] dark:text-stone-100">
-      <div className="mx-auto flex h-full w-full max-w-[960px] flex-col">
+      <div className="mx-auto flex h-full w-full max-w-[920px] flex-col">
         <header className="shrink-0 border-b border-orange-200/70 bg-white/75 backdrop-blur-md dark:border-orange-950/70 dark:bg-stone-950/60">
           <div className="flex h-11 items-center justify-between px-2.5 sm:px-3">
             <div className="flex items-center gap-2">
@@ -366,7 +366,7 @@ function MainView({
               {copy.targetLabel}
             </label>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <div className="w-full sm:max-w-[18rem]">
+              <div className="w-full sm:max-w-[14rem]">
                 <input
                   id="target"
                   type="text"
@@ -674,7 +674,10 @@ function HopRow({
         {hop.index}
       </td>
       <td className="px-1 py-1 whitespace-nowrap">
-        <div className={`inline-block max-w-[9rem] text-[12px] align-top ${destinationAccentClass}`} title={hostTitle}>
+        <div
+          className={`inline-block min-w-0 max-w-[7.5rem] align-top text-[12px] sm:max-w-[8.5rem] ${destinationAccentClass}`}
+          title={hostTitle}
+        >
           <div className="truncate font-medium">
             {hostDisplay}
           </div>
@@ -932,7 +935,7 @@ function localizeDisplayText(text: string, language: Settings['language']): stri
     'Traffic likely stops here': 'Трафик, вероятно, обрывается здесь',
     'Connection lost at this hop': 'Соединение теряется на этом хопе',
     'The server may be offline': 'Сервер может быть недоступен',
-    'A firewall may be blocking ping replies': 'Firewall может блокировать ответы на ping',
+    'A firewall may be blocking ping replies': 'Фаервол может блокировать ответы на ping',
     'The route may not be reaching the destination': 'Маршрут может не доходить до назначения',
     'The router may be rate-limiting ping': 'Роутер может ограничивать ответы на ping',
     'This device may deprioritize control traffic':
@@ -1106,8 +1109,8 @@ const RUSSIAN_UI_TEXT = {
   navSettings: 'Настройки',
   targetLabel: 'Хост или IP цели',
   targetPlaceholder: 'например, google.com или 8.8.8.8',
-  startTrace: 'Start trace',
-  stopTrace: 'Stop',
+  startTrace: 'Начать',
+  stopTrace: 'Стоп',
   resolvedLabel: 'Разрешён',
   startedLabel: 'Запущено',
   traceInProgressTitle: 'Трассировка выполняется',
@@ -1120,7 +1123,7 @@ const RUSSIAN_UI_TEXT = {
   traceRunningHint: 'Определяем маршрут и ждём первые ответы от хопов.',
   emptyStateTitle: 'Готово к диагностике',
   emptyStateText:
-    'Введите hostname или IP-адрес выше и нажмите Start trace, чтобы начать сетевую диагностику.',
+    'Введите хост или IP-адрес выше и нажмите «Начать», чтобы запустить сетевую диагностику.',
   summaryObservations: 'Наблюдения',
   summaryActions: 'Рекомендуемые действия',
   settingsTitle: 'Настройки',
